@@ -1,0 +1,33 @@
+# Robot LiDAR Fusion — Default Configuration
+# This file documents the default values. Actual configuration is loaded
+# from environment variables via robot_hw/robot_config.py.
+
+control:
+  cycle_time: 0.01          # 100 Hz
+  total_memory_bytes: 67108864  # 64 MB
+
+battery:
+  capacity_wh: 500.0
+  nominal_voltage: 48.0
+
+thermal:
+  warning_celsius: 70.0
+  critical_celsius: 85.0
+
+sensors:
+  lidar_enabled: true
+  camera_enabled: true
+  lidar_model: os1-64
+  camera_model: realsense-d435
+
+hazard:
+  proximity_warn_m: 1.0
+  proximity_stop_m: 0.3
+
+communication:
+  telemetry_endpoint: "http://localhost:8080/telemetry"
+  telemetry_interval_s: 1.0
+
+logging:
+  level: INFO
+  file: robot.log

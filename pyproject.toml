@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robot-lidar-fusion"
+version = "0.1.0"
+description = "The open-source control stack for autonomous robots with LiDAR-camera sensor fusion."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.11"
+authors = [
+    {name = "iceccarelli"},
+]
+keywords = [
+    "robotics",
+    "lidar",
+    "sensor-fusion",
+    "control-systems",
+    "autonomous-robots",
+    "ros2",
+    "perception",
+    "navigation",
+    "locomotion",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ros2 = [
+    "rclpy>=3.0",
+]
+ouster = [
+    "ouster-sdk>=0.10",
+]
+realsense = [
+    "pyrealsense2>=2.50",
+]
+cv = [
+    "opencv-python>=4.8",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+]
+all = [
+    "robot-lidar-fusion[ros2,ouster,realsense,cv,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/iceccarelli/robot-lidar-fusion"
+Documentation = "https://github.com/iceccarelli/robot-lidar-fusion/tree/main/docs"
+Repository = "https://github.com/iceccarelli/robot-lidar-fusion"
+Issues = "https://github.com/iceccarelli/robot-lidar-fusion/issues"
+Changelog = "https://github.com/iceccarelli/robot-lidar-fusion/blob/main/CHANGELOG.md"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
