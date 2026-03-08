@@ -1,0 +1,13 @@
+camera_name: realsense_rgb
+width: 640
+height: 480
+# Intrinsic camera matrix for the raw image (3×3 row-major)
+K: [600.0, 0.0, 320.0, 0.0, 600.0, 240.0, 0.0, 0.0, 1.0]
+# Distortion coefficients (k1, k2, p1, p2, k3) for plumb_bob model
+D: [0.0, 0.0, 0.0, 0.0, 0.0]
+distortion_model: plumb_bob
+
+# This file serves as a template.  Replace the values above with
+# measured intrinsics for your camera.  Use the `camera_calibration`
+# package (`ros2 run camera_calibration cameracalibrator`) or
+# OpenCV to estimate fx, fy, cx, cy and distortion coefficients.

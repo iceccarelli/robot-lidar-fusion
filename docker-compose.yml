@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  robot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: robot-lidar-fusion
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+      - ./calibration:/app/calibration:ro
+    restart: unless-stopped
+    command: ["python", "scripts/run_robot.py", "--cycles", "100"]
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: robot-lidar-fusion-test
+    command: ["pytest", "-v"]
+    profiles:
+      - test
