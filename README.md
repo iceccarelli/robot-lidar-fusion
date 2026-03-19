@@ -72,7 +72,7 @@ flowchart TB
         R[LIDAR Utils]
         S[Sensor Frames]
         T[Time Sync]
-        U[Sensor I/O (Direct/ROS2)]
+        U["Sensor I/O (Direct/ROS2)"]    <!-- Fixed: quotes around label -->
         V[Sensor Processing]
     end
 
