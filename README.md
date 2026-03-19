@@ -1,6 +1,6 @@
 # Robot LiDAR Fusion
 
-**The open‑source control stack for autonomous robots with LiDAR‑camera sensor fusion.**  
+**The latest version of an open‑source control stack for autonomous robots with LiDAR‑camera sensor fusion.**  
 One codebase. Any robot arm. Any LiDAR. Any camera. Any environment.
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
