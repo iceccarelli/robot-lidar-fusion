@@ -203,16 +203,17 @@ robot-lidar-fusion/
 ---
 
 ## Examples
+The `examples/` directory contains three practical demonstrations designed to accelerate development and illustrate key capabilities:
 
-The `examples/` directory contains three working demonstrations:
+- **`basic_control_loop.py`** – Runs multiple cycles of the `RobotOrchestrator` with mock hardware, providing the simplest way to understand and prototype the deterministic control system.
+- **`sensor_fusion_demo.py`** – Uses synthetic LiDAR and camera frames to demonstrate timestamp synchronization and real-time minimum forward obstacle distance calculation.
+- **`demo_os1_camera_live.py`** – Connects to a real Ouster OS1 LiDAR and camera (ROS2 or direct SDK) for live sensor ingestion and precise time synchronization.
 
-- **`basic_control_loop.py`** – Runs 10 cycles of the orchestrator with mock hardware, showing the simplest possible integration.
-- **`sensor_fusion_demo.py`** – Creates synthetic LiDAR and camera frames, synchronises them by timestamp, and computes the minimum forward obstacle distance.
-- **`demo_os1_camera_live.py`** – Connects to a real Ouster OS1 LiDAR and camera (ROS2 or direct SDK) for live sensor ingestion and time synchronisation.
+These examples serve as excellent starting points, significantly reducing onboarding time and enabling faster implementation of robust sensor fusion and control applications.
 
 ---
-
 ## Enterprise & Gateway
+The `enterprise/` and `gateway/` directories provide a roadmap for scaling the project to industrial and fleet-level deployments, offering substantial value for commercial users through enhanced capabilities, compliance, and operational tools.
 
 The **`enterprise/`** directory contains planned extensions for:
 - Certified robot connectors (KUKA, ABB, Fanuc, Universal Robots)
