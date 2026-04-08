@@ -33,7 +33,7 @@ import os
 import random
 import time
 
-from robot_orchestrator import RobotOrchestrator
+from robot_hw.robot_orchestrator import RobotOrchestrator
 
 from robot_hw.robot_config import load as load_config
 
