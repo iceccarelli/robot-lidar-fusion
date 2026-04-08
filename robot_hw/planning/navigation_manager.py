@@ -101,7 +101,11 @@ class NavigationManager:
         return list(self._local_plan)
 
     def get_latest_velocity_command(self) -> tuple[float, float, float]:
-        return tuple(self._latest_velocity_command)
+        return (
+            float(self._latest_velocity_command[0]),
+            float(self._latest_velocity_command[1]),
+            float(self._latest_velocity_command[2]),
+        )
 
     def get_latest_report(self) -> dict[str, Any]:
         return dict(self._latest_report)
