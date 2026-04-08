@@ -39,7 +39,7 @@ import threading
 import time
 from typing import Any
 
-from robot_orchestrator import RobotOrchestrator
+from robot_hw.robot_orchestrator import RobotOrchestrator
 
 from robot_hw.planning.task_hardware_mapping import Task
 from robot_hw.robot_config import load as load_config
