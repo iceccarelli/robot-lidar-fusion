@@ -195,7 +195,8 @@ class _SensorIONode(Node):
         except Exception:
             ts = time.time()
         points: list[tuple[float, float, float]] = []
-        intensities: list[float] | None = []
+        intensity_values: list[float] = []
+        intensities: list[float] | None
         # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
@@ -215,9 +216,9 @@ class _SensorIONode(Node):
                 except Exception:
                     # If conversion fails, leave points empty and store raw message
                     points = []
-                    intensities = None
+                    intensities = intensity_values if intensity_values else None
         else:
-            intensities = None
+            intensities = intensity_values if intensity_values else None
         frame_id = getattr(msg.header, "frame_id", "lidar") or "lidar"
         meta: dict[str, Any] = {}
         if not points:
