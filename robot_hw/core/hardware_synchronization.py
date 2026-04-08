@@ -233,7 +233,8 @@ class HardwareSynchronizer:
                 self._hardware.apply_commands(commands)
         if hasattr(self._hardware, "read_sensors"):
             try:
-                return self._hardware.read_sensors()
+                sensor_state = self._hardware.read_sensors()
+                return dict(sensor_state)
             except Exception:
                 # TODO: log and propagate sensor reading errors
                 return {}
