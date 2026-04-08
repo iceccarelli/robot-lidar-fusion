@@ -133,34 +133,34 @@ class TaskHardwareMapper:
                     JointInstruction(joint_id=joint_id, command={"position": pos})
                 )
             return position_instructions
-        
+
         if "target_velocity" in task.parameters:
             tv = task.parameters["target_velocity"]
             vx: float
             if isinstance(tv, (list, tuple)) and tv:
                 try:
                     vx = float(tv[0])
-                except (TypeError, ValueError):
-                    vx = 0.0
-            elif isinstance(tv, (int, float, str)):
-                try:
-                    vx = float(tv)
-                except (TypeError, ValueError):
+                except Exception:
                     vx = 0.0
             else:
-                vx = 0.0
-        
+                if isinstance(tv, (int, float, str)):
+                    try:
+                        vx = float(tv)
+                    except Exception:
+                        vx = 0.0
+                else:
+                    vx = 0.0
+
             joint_ids: list[str] = []
             if current_state and isinstance(current_state.get("positions"), dict):
                 joint_ids = list(current_state["positions"].keys())
-        
+
             velocity_instructions: list[JointInstruction] = []
             for jid in joint_ids:
                 velocity_instructions.append(
                     JointInstruction(joint_id=jid, command={"velocity": vx})
                 )
             return velocity_instructions
-
 
         # Case 2: use inverse kinematics
         target = task.parameters

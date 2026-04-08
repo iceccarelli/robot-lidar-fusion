@@ -171,6 +171,7 @@ class _SensorIONode(Node):
         self._parent = parent
         # Use queue depth directly to avoid local ROS QoS imports in typed code
         qos = qos_depth
+
         # Subscribe to LiDAR point clouds
         self._lidar_sub = self.create_subscription(
             PointCloud2, lidar_topic, self._lidar_callback, qos
@@ -188,18 +189,16 @@ class _SensorIONode(Node):
             ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
         except Exception:
             ts = time.time()
-    
+
         points: list[tuple[float, float, float]] = []
         intensity_values: list[float] = []
         intensities: list[float] | None = None
-    
+
         # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
                 for p in point_cloud2.read_points(
-                    msg,
-                    field_names=("x", "y", "z", "intensity"),
-                    skip_nans=True,
+                    msg, field_names=("x", "y", "z", "intensity"), skip_nans=True
                 ):
                     x, y, z, i = p
                     points.append((float(x), float(y), float(z)))
@@ -208,9 +207,7 @@ class _SensorIONode(Node):
             except Exception:
                 try:
                     for p in point_cloud2.read_points(
-                        msg,
-                        field_names=("x", "y", "z"),
-                        skip_nans=True,
+                        msg, field_names=("x", "y", "z"), skip_nans=True
                     ):
                         x, y, z = p
                         points.append((float(x), float(y), float(z)))
@@ -220,12 +217,11 @@ class _SensorIONode(Node):
                 intensities = None
         else:
             intensities = None
-    
+
         frame_id = getattr(msg.header, "frame_id", "lidar") or "lidar"
         meta: dict[str, Any] = {}
         if not points:
             meta["raw_msg"] = msg
-    
         lf = LidarFrame(
             timestamp=ts,
             frame_id=frame_id,

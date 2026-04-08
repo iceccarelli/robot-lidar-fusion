@@ -162,43 +162,50 @@ class HardwareSynchronizer:
                 # Define hazard injection per environment
                 if env == "MINING":
                     # Gas and radiation hazards occur frequently in mining
-                    snapshot["gas"] = random.uniform(0.0, 3.0)
-                    snapshot["radiation"] = random.uniform(0.0, 2.0)
-                    snapshot["high_voltage"] = random.uniform(0.0, 10.0)
+                    snapshot["gas"] = random.uniform(0.0, 3.0)  # nosec B311
+                    snapshot["radiation"] = random.uniform(0.0, 2.0)  # nosec B311
+                    snapshot["high_voltage"] = random.uniform(0.0, 10.0)  # nosec B311
                     # Occasional trains or pedestrians in tunnels
-                    snapshot["train"] = random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
-                    snapshot["pedestrian"] = bool(random.random() < 0.05)
+                    train_distance = random.uniform(0.0, 3.0)  # nosec B311
+                    train_detected = random.random() < 0.1  # nosec B311
+                    snapshot["train"] = train_distance if train_detected else 5.0
+                    snapshot["pedestrian"] = bool(random.random() < 0.05)  # nosec B311
                 elif env == "UNDERWATER":
                     # Obstacles within a few metres detected by sonar
-                    snapshot["proximity"] = random.uniform(0.0, 2.0)
+                    snapshot["proximity"] = random.uniform(0.0, 2.0)  # nosec B311
                     # Rare gas leaks or radiation underwater
-                    snapshot["gas"] = random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
+                    gas_level = random.uniform(0.0, 0.5)  # nosec B311
+                    gas_detected = random.random() < 0.05  # nosec B311
+                    snapshot["gas"] = gas_level if gas_detected else 0.0
                     snapshot["radiation"] = (
-                        random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                        random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0  # nosec B311
                     )
                     snapshot["pedestrian"] = False
                 elif env == "SPACE":
                     # High radiation and electrical hazards in space operations
-                    snapshot["radiation"] = random.uniform(0.0, 3.0)
-                    snapshot["high_voltage"] = random.uniform(0.0, 20.0)
+                    snapshot["radiation"] = random.uniform(0.0, 3.0)  # nosec B311
+                    snapshot["high_voltage"] = random.uniform(0.0, 20.0)  # nosec B311
                     # Proximity values are less relevant; objects are far away
-                    snapshot["proximity"] = random.uniform(0.0, 10.0)
+                    snapshot["proximity"] = random.uniform(0.0, 10.0)  # nosec B311
                     snapshot["pedestrian"] = False
                 elif env == "FORESTRY":
                     # Frequent obstacles and humans in forestry
-                    snapshot["proximity"] = random.uniform(0.0, 1.5)
-                    snapshot["pedestrian"] = bool(random.random() < 0.2)
+                    snapshot["proximity"] = random.uniform(0.0, 1.5)  # nosec B311
+                    snapshot["pedestrian"] = bool(random.random() < 0.2)  # nosec B311
                     # Occasionally detect a human or animal close by
-                    snapshot["human"] = random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
+                    human_distance = random.uniform(0.0, 2.0)  # nosec B311
+                    human_detected = random.random() < 0.1  # nosec B311
+                    snapshot["human"] = human_distance if human_detected else 5.0
                 else:
                     # Generic environment: occasional obstacles but mostly clear
                     snapshot["proximity"] = (
-                        random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                        random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0  # nosec B311
                     )
-                    snapshot["pedestrian"] = bool(random.random() < 0.01)
-            except Exception:
+                    snapshot["pedestrian"] = bool(random.random() < 0.01)  # nosec B311
+
+            except Exception as exc:
                 # If hazard injection fails, proceed with the basic snapshot
-                pass
+                snapshot["hazard_injection_error"] = str(exc)
             return snapshot
 
     def sync(self, commands: dict[str, ActuatorCommand]) -> dict[str, Any]:

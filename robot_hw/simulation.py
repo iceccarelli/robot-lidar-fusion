@@ -130,10 +130,9 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             # 4. Process pending high-level tasks, prioritise and map them
             desired_joint_commands: dict[str, Any] = {}
             with self.concurrency_manager.acquire("tasks"):
-                tasks_to_process: list[Task] = list(self.pending_tasks)
-                self.pending_tasks = []
+                tasks_to_process: list[Task] = self.pending_tasks
+                self.pending_tasks: list[Task] = []
             if tasks_to_process:
-                # First order tasks by distance to minimise travel
                 try:
                     ordered = self.task_mapper.assign_task_sequence(
                         tasks_to_process, self.current_state
@@ -277,8 +276,8 @@ def random_task_submitter(
         for jid in joint_ids:
             targets[jid] = random.uniform(-1.5, 1.5)
             # Occasionally send velocity or torque commands
-            if random.random() < 0.3:  # nosec B311
-                velocities[jid] = random.uniform(-2.0, 2.0)  # nosec B311
+            if random.random() < 0.3:
+                velocities[jid] = random.uniform(-2.0, 2.0)
             if random.random() < 0.2:  # nosec B311
                 torques[jid] = random.uniform(-1.0, 1.0)  # nosec B311
         # Build a parameter dict that includes only present fields
