@@ -184,8 +184,11 @@ class _SensorIONode(Node):
             ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
         except Exception:
             ts = time.time()
-        points: list[tuple[float, float, float]] = []
-        intensities: list[float] | None = []
+        for p in point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True):
+            x, y, z, i = p
+            points.append((float(x), float(y), float(z)))
+            intensity_values.append(float(i))
+        intensities = intensity_values if intensity_values else None
         # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
