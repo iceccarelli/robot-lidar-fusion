@@ -128,7 +128,7 @@ class TaskHardwareMapper:
             jp = task.parameters["joint_positions"]
             if not isinstance(jp, dict):
                 raise ValueError("'joint_positions' must be a dict")
-            instructions: list[JointInstruction] = []
+            joint_instructions: list[JointInstruction] = []
             for joint_id, pos in jp.items():
                 instructions.append(JointInstruction(joint_id=joint_id, command={"position": pos}))
             return instructions
@@ -154,7 +154,7 @@ class TaskHardwareMapper:
             joint_ids = []
             if current_state and isinstance(current_state.get("positions"), dict):
                 joint_ids = list(current_state["positions"].keys())
-            instructions: list[JointInstruction] = []
+            joint_instructions: list[JointInstruction] = []
             for jid in joint_ids:
                 instructions.append(JointInstruction(joint_id=jid, command={"velocity": vx}))
             return instructions
