@@ -130,8 +130,8 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             # 4. Process pending high-level tasks, prioritise and map them
             desired_joint_commands: dict[str, Any] = {}
             with self.concurrency_manager.acquire("tasks"):
-                tasks_to_process = self.pending_tasks
-                self.pending_tasks: list[dict[str, object]] = []
+                tasks_to_process: list[Task] = list(self.pending_tasks)
+                self.pending_tasks = []
             if tasks_to_process:
                 # First order tasks by distance to minimise travel
                 try:
