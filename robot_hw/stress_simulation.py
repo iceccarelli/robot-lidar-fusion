@@ -40,7 +40,7 @@ from robot_hw.robot_config import load as load_config
 
 def random_goal(radius: float = 5.0) -> dict[str, float]:
     """Generate a random (x, y) goal within a square of given radius."""
-    return {"x": random.uniform(-radius, radius), "y": random.uniform(-radius, radius)}
+    return {"x": random.uniform(-radius, radius), "y": random.uniform(-radius, radius)}  # nosec B311
 
 
 def run_simulation(profile: str, cycles: int = 100) -> None:
@@ -75,7 +75,7 @@ def run_simulation(profile: str, cycles: int = 100) -> None:
     # random goals to exercise mission planning and task scheduling
     for _cycle in range(cycles):
         # With a small probability, add another goal
-        if random.random() < 0.2:
+        if random.random() < 0.2:  # nosec B311
             orch.submit_goal(random_goal())
         orch.run(num_cycles=1)
         # Introduce a small delay between cycles to simulate real time
