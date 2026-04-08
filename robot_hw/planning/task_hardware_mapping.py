@@ -129,8 +129,8 @@ class TaskHardwareMapper:
             if not isinstance(jp, dict):
                 raise ValueError("'joint_positions' must be a dict")
             joint_instructions: list[JointInstruction] = []
-            for joint_id, pos in jp.items():
-                instructions.append(JointInstruction(joint_id=joint_id, command={"position": pos}))
+            for jid in joint_ids:
+                instructions.append(JointInstruction(joint_id=jid, command={"velocity": vx}))
             return instructions
         # Case 1b: direct velocity specification (locomotion)
         if "target_velocity" in task.parameters:
@@ -156,8 +156,10 @@ class TaskHardwareMapper:
                 joint_ids = list(current_state["positions"].keys())
             joint_instructions: list[JointInstruction] = []
             for jid in joint_ids:
-                instructions.append(JointInstruction(joint_id=jid, command={"velocity": vx}))
-            return instructions
+                joint_instructions.append(
+                    JointInstruction(joint_id=jid, command={"velocity": vx})
+                )
+            return joint_instructions
         # Case 2: use inverse kinematics
         target = task.parameters
         joint_targets = self._kinematics.inverse_kinematics(target, current_state)
