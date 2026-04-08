@@ -116,7 +116,8 @@ class FaultDetector:
                 # Normalise numeric value
                 try:
                     p = float(pos)
-                except Exception:
+                except (TypeError, ValueError):
+                    self._logger.debug("Skipping non-numeric position for joint %s: %r", jid, pos)
                     continue
                 # Retrieve the last position for this joint
                 last_pos = None
@@ -195,8 +196,11 @@ class FaultDetector:
                             mval = float(m_pos)
                             if abs(cval - mval) > self.max_position_error:
                                 self._faults.append(f"position_mismatch:{jid}")
-                        except Exception:
-                            pass
+                        except (TypeError, ValueError):
+                            self._logger.debug(
+                                "Unable to compare commanded and measured position for joint %s",
+                                jid,
+                            )
                     # Compare velocities
                     if c_vel is not None and m_vel is not None:
                         try:
@@ -204,8 +208,11 @@ class FaultDetector:
                             mval = float(m_vel)
                             if abs(cval - mval) > self.max_velocity_error:
                                 self._faults.append(f"velocity_mismatch:{jid}")
-                        except Exception:
-                            pass
+                        except (TypeError, ValueError):
+                            self._logger.debug(
+                                "Unable to compare commanded and measured velocity for joint %s",
+                                jid,
+                            )
         except Exception as exc:
             self._logger.debug("Error detecting mismatch faults: %s", exc)
         # Store current as last for next update
