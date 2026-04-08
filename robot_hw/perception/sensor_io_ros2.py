@@ -169,14 +169,8 @@ class _SensorIONode(Node):
     ) -> None:
         super().__init__(node_name)
         self._parent = parent
-        # Subscriptions: use QoS profile optimised for sensor data
-        try:
-            from rclpy.qos import qos_profile_sensor_data
-        except ImportError:
-            qos_profile_sensor_data = None
-
-        qos = qos_profile_sensor_data
-        qos.depth = qos_depth
+        # Use queue depth directly to avoid local ROS QoS imports in typed code
+        qos = qos_depth
         # Subscribe to LiDAR point clouds
         self._lidar_sub = self.create_subscription(
             PointCloud2, lidar_topic, self._lidar_callback, qos
@@ -194,35 +188,44 @@ class _SensorIONode(Node):
             ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
         except Exception:
             ts = time.time()
+    
         points: list[tuple[float, float, float]] = []
         intensity_values: list[float] = []
-        intensities: list[float] | None
+        intensities: list[float] | None = None
+    
         # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
                 for p in point_cloud2.read_points(
-                    msg, field_names=("x", "y", "z", "intensity"), skip_nans=True
+                    msg,
+                    field_names=("x", "y", "z", "intensity"),
+                    skip_nans=True,
                 ):
                     x, y, z, i = p
                     points.append((float(x), float(y), float(z)))
-                    intensities.append(float(i))
+                    intensity_values.append(float(i))
+                intensities = intensity_values if intensity_values else None
             except Exception:
                 try:
                     for p in point_cloud2.read_points(
-                        msg, field_names=("x", "y", "z"), skip_nans=True
+                        msg,
+                        field_names=("x", "y", "z"),
+                        skip_nans=True,
                     ):
                         x, y, z = p
                         points.append((float(x), float(y), float(z)))
                 except Exception:
                     # If conversion fails, leave points empty and store raw message
                     points = []
-                    intensities = intensity_values if intensity_values else None
+                intensities = None
         else:
-            intensities = intensity_values if intensity_values else None
+            intensities = None
+    
         frame_id = getattr(msg.header, "frame_id", "lidar") or "lidar"
         meta: dict[str, Any] = {}
         if not points:
             meta["raw_msg"] = msg
+    
         lf = LidarFrame(
             timestamp=ts,
             frame_id=frame_id,
