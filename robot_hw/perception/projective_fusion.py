@@ -103,7 +103,11 @@ class ProjectiveFusion:
             )
             projected_points.append(
                 ProjectedPoint(
-                    lidar_point_xyz=tuple(map(float, point_xyz)),
+                    lidar_point_xyz=(
+                        float(point_xyz[0]),
+                        float(point_xyz[1]),
+                        float(point_xyz[2]),
+                    ),
                     camera_point_xyz=(float(cx), float(cy), float(cz)),
                     pixel_uv=(float(pixel_u), float(pixel_v)),
                     depth_m=float(cz),
