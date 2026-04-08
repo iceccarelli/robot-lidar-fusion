@@ -106,7 +106,7 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             # Simulate SOC decay (0.001 per cycle) plus noise
             soc = max(0.0, 1.0 - 0.001 * cycle + random.uniform(-0.01, 0.01))
             temperature = 25.0 + 0.2 * cycle + random.uniform(-1.0, 1.0)
-            from power.battery_management import BatteryState
+            from robot_hw.power.battery_management import BatteryState
 
             battery_state = BatteryState(
                 voltage=voltage,
@@ -132,7 +132,7 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             desired_joint_commands: dict[str, Any] = {}
             with self.concurrency_manager.acquire("tasks"):
                 tasks_to_process = self.pending_tasks
-                self.pending_tasks = []
+                self.pending_tasks: list[dict[str, object]] = []
             if tasks_to_process:
                 # First order tasks by distance to minimise travel
                 try:
@@ -187,7 +187,7 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             if desired_joint_commands:
                 print(f"[JointSync] Applying commands: {desired_joint_commands}")
                 # Build JointCommand objects on the fly
-                from control.joint_synchronization import JointCommand
+                from robot_hw.control.joint_synchronization import JointCommand
 
                 jc_map = {
                     jid: JointCommand(
