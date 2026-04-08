@@ -188,9 +188,8 @@ class JointSynchronizer:
             # Detect environmental hazards such as high voltage cables or
             # approaching trains/cars/humans
             self.detect_environment_hazards(state_for_check)
-        except Exception:
-            # Never let safety functions raise; ignore unexpected errors
-            pass
+        except Exception as exc:
+            return state_for_check
         # Return the clean joint state; hazard keys are not propagated
         return new_state
 
@@ -213,7 +212,7 @@ class JointSynchronizer:
         for jid, tor in torques.items():
             try:
                 tor_val = float(tor)
-            except Exception:
+            except (TypeError, ValueError):
                 continue
             if abs(tor_val) > self.max_torque:
                 print(
@@ -288,7 +287,7 @@ class JointSynchronizer:
             else:
                 try:
                     dist = float(info)
-                except Exception:
+                except (TypeError, ValueError):
                     continue
                 print(
                     f"[Hazard] {name.replace('_', ' ').title()} within {dist:.2f} m – take caution"
