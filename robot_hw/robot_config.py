@@ -45,6 +45,7 @@ def _f(name: str, default: float, *, min: float | None = None, max: float | None
         if raw in (None, ""):  # noqa: SIM108
             val = default
         else:
+            assert raw is not None
             val = float(raw)
     except (TypeError, ValueError):
         val = default
