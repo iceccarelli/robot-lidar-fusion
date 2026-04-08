@@ -1,0 +1,32 @@
+dataset_name: fusion_demo_sequence
+version: 1
+license: Apache-2.0
+source: repository_local_fixture
+description: >-
+  Small deterministic LiDAR-camera replay fixture for robot-lidar-fusion.
+  It is designed for smoke tests, launch bringup validation, and future
+  ROS 2 topic replay without requiring custom hardware.
+frames:
+  count: 3
+  lidar_frame_id: os_sensor
+  camera_frame_id: camera_color_optical_frame
+  base_frame_id: base_link
+  map_frame_id: map
+topics:
+  lidar: /robot_lidar_fusion/demo/lidar_points
+  camera: /robot_lidar_fusion/demo/camera_image
+  camera_info: /robot_lidar_fusion/demo/camera_info
+  fused_debug: /robot_lidar_fusion/demo/fused_debug
+synchronization:
+  policy: approximate_time
+  nominal_offset_seconds: 0.01
+  max_offset_seconds: 0.05
+expected_outputs:
+  - synchronized_lidar_camera_frames
+  - fused_overlay_candidates
+  - proximity_debug_values
+  - replay_status_events
+notes: >-
+  This fixture intentionally uses a compact JSON sequence so it can be
+  versioned directly in the repository and consumed by both Python-first
+  utilities and future ROS 2 replay adapters.

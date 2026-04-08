@@ -1,0 +1,18 @@
+[
+  {
+    "cycles": 3,
+    "health_events": 0,
+    "name": "gazebo_static_obstacles",
+    "navigation_status": "planned",
+    "runtime_metrics": 3,
+    "simulator": "gazebo"
+  },
+  {
+    "cycles": 3,
+    "health_events": 0,
+    "name": "isaac_dynamic_replan",
+    "navigation_status": "planned",
+    "runtime_metrics": 3,
+    "simulator": "isaac_sim"
+  }
+]

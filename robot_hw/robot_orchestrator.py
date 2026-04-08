@@ -66,6 +66,11 @@ from robot_hw.power.thermal_management import ThermalManager
 
 # Stage B additions: sensor processing and hazard management
 from robot_hw.robot_config import load as load_config
+from robot_hw.telemetry.runtime_metrics import (
+    build_health_events,
+    build_runtime_metrics,
+    build_structured_log,
+)
 
 
 class DummyKinematicsModel:
@@ -134,6 +139,9 @@ class RobotOrchestrator:
         self.pending_tasks: list[Task] = []
         # Last sensor state
         self.current_state: dict[str, Any] = {}
+        self.runtime_metrics_history: list[dict[str, Any]] = []
+        self.structured_logs: list[dict[str, Any]] = []
+        self.health_events: list[dict[str, Any]] = []
 
         # ------------------------------------------------------------------
         # Stage B: instantiate sensor processor and hazard manager
@@ -301,17 +309,19 @@ class RobotOrchestrator:
     def submit_goal(self, goal: dict[str, Any]) -> None:
         """Submit a high‑level mission goal to the mission planner.
 
-        The goal is passed through to the mission planner's queue.  Goals
-        are processed sequentially.  This method is thread‑safe.
+        The goal is forwarded to the mission planner and, when it includes
+        planar ``x``/``y`` coordinates, also becomes the active navigation
+        target for map-based planning and replanning.
 
         Parameters
         ----------
         goal : dict[str, Any]
             A goal specification, e.g. ``{"x": 1.0, "y": 2.0}``.
         """
-        # Forward to mission planner; no lock needed because mission planner
-        # manages its own queue internally
         self.mission_planner.add_goal(goal)
+        if isinstance(goal, dict) and "x" in goal and "y" in goal:
+            with contextlib.suppress(Exception):
+                self.navigation_manager.set_goal((float(goal["x"]), float(goal["y"])))
 
     def run(self, num_cycles: int = 100) -> None:
         """Run the control loop for a fixed number of cycles.
@@ -530,12 +540,29 @@ class RobotOrchestrator:
             # ------------------------------------------------------------------
             # Stage C: navigation and locomotion updates
             #
-            # Compute or refine the navigation plan based on the fused state.
+            # Compute or refine the navigation plan based on the fused state,
+            # store planning artefacts on the shared state, and derive an
+            # executable locomotion command from the local plan.
             _plan = self.navigation_manager.update(self.current_state)
-            # In a full implementation, the plan would inform the desired
-            # velocities passed to the locomotion controller.  Here we
-            # compute zero‑velocity commands as a placeholder.
-            _ = self.locomotion_controller.compute_commands((0.0, 0.0, 0.0))
+            navigation_report = self.navigation_manager.get_latest_report()
+            if navigation_report:
+                self.current_state["navigation"] = navigation_report
+                nav2_payload = navigation_report.get("nav2")
+                if isinstance(nav2_payload, dict):
+                    self.current_state["nav2_costmap"] = nav2_payload
+                map_summary = navigation_report.get("map")
+                if isinstance(map_summary, dict):
+                    self.current_state["map"] = map_summary
+                if isinstance(navigation_report.get("global_plan"), list):
+                    self.current_state["global_plan"] = navigation_report["global_plan"]
+                if isinstance(navigation_report.get("local_plan"), list):
+                    self.current_state["local_plan"] = navigation_report["local_plan"]
+            self.locomotion_controller.update_state(self.current_state)
+            desired_velocity = self.navigation_manager.get_latest_velocity_command()
+            locomotion_commands = self.locomotion_controller.compute_commands(desired_velocity)
+            if locomotion_commands:
+                self.current_state["locomotion_commands"] = locomotion_commands
+                self.submit_task(Task(id="follow_navigation_velocity", parameters={"target_velocity": desired_velocity}))
             # ------------------------------------------------------------------
             # 2. Update battery and thermal managers
             # ------------------------------------------------------------------
@@ -617,6 +644,23 @@ class RobotOrchestrator:
             # ------------------------------------------------------------------
             if desired_joint_commands:
                 # Extract current positions and velocities for the joints we will command
+                preserved_state = {
+                    key: self.current_state.get(key)
+                    for key in (
+                        "fusion",
+                        "hazards",
+                        "proximity",
+                        "pedestrian",
+                        "hazard_flags",
+                        "navigation",
+                        "map",
+                        "nav2_costmap",
+                        "global_plan",
+                        "local_plan",
+                        "locomotion_commands",
+                    )
+                    if key in self.current_state
+                }
                 joint_state_only = {
                     jid: {"position": self.current_state.get("positions", {}).get(jid),
                           "velocity": self.current_state.get("velocities", {}).get(jid)}
@@ -625,6 +669,7 @@ class RobotOrchestrator:
                 with self.concurrency_manager.acquire("hardware"):
                     sensor_data = self.joint_sync.synchronize(desired_joint_commands, joint_state_only)
                 self.current_state = self._normalise_state(sensor_data)
+                self.current_state.update(preserved_state)
                 # Record the commands sent for fault detection in the next cycle
                 self._last_joint_commands = desired_joint_commands.copy()
             # ------------------------------------------------------------------
@@ -648,17 +693,48 @@ class RobotOrchestrator:
             # Stage G: send telemetry
             #
             try:
-                # Compose telemetry dictionary with key state variables
+                # Compose telemetry dictionary with key state variables and runtime metrics.
+                faults = self.fault_detector.get_faults() if self.fault_detector.has_fault() else []
+                hazards = self.hazard_manager.current_hazards()
+                metrics = build_runtime_metrics(
+                    cycle=cycle,
+                    loop_duration_s=time.perf_counter() - start,
+                    state=self.current_state,
+                    telemetry_count=len(getattr(self.communication, "_telemetry_log", [])),
+                    fault_count=len(faults),
+                    hazard_count=len(hazards),
+                )
+                events = build_health_events(
+                    cycle=cycle,
+                    timestamp=self.current_state.get("timestamp"),
+                    battery_ok=self.battery_manager.is_ok(),
+                    thermal_ok=self.thermal_manager.is_within_limits(),
+                    consistency_ok=consistent,
+                    faults=faults,
+                    hazards=hazards,
+                )
                 telemetry = {
                     "timestamp": self.current_state.get("timestamp"),
                     "battery_soc": getattr(self.battery_manager.state, "soc", None) if self.battery_manager.state else None,
                     "battery_voltage": getattr(self.battery_manager.state, "voltage", None) if self.battery_manager.state else None,
                     "battery_current": getattr(self.battery_manager.state, "current", None) if self.battery_manager.state else None,
                     "thermal_max": max(self.thermal_manager.current_temps.values()) if self.thermal_manager.current_temps else None,
-                    "hazards": self.hazard_manager.current_hazards(),
-                    "faults": self.fault_detector.get_faults() if self.fault_detector.has_fault() else [],
+                    "hazards": hazards,
+                    "faults": faults,
+                    "runtime_metrics": metrics,
+                    "health_events": [event.as_dict() for event in events],
                 }
                 self.communication.send_telemetry(telemetry)
+                self.runtime_metrics_history.append(metrics)
+                self.health_events.extend(event.as_dict() for event in events)
+                self.structured_logs.append(
+                    build_structured_log(
+                        cycle=cycle,
+                        state=self.current_state,
+                        metrics=metrics,
+                        events=events,
+                    )
+                )
             except Exception:
                 pass
             # ------------------------------------------------------------------

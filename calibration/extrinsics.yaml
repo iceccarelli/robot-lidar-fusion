@@ -1,19 +1,27 @@
-# Static transforms between robot frames and sensors
 transforms:
-  # LiDAR mounted on torso/head height, slight downward tilt
+  # LiDAR mounted on torso/head height, aligned with the robot base frame.
   - parent_frame: base_link
     child_frame: os_sensor
     translation: [0.0, 0.0, 1.20]
     rotation: [0.0, 0.0, 0.0, 1.0]
 
-  # Camera aligned with LiDAR with slight vertical offset
+  # Camera body frame mounted slightly above the LiDAR.
   - parent_frame: base_link
     child_frame: camera_link
     translation: [0.0, 0.0, 1.25]
     rotation: [0.0, 0.0, 0.0, 1.0]
 
+  # Standard ROS optical frame derived from camera_link.
+  # This rotation maps the conventional camera body axes into the optical frame
+  # used by image geometry, where z points forward, x points right, and y points down.
+  - parent_frame: camera_link
+    child_frame: camera_color_optical_frame
+    translation: [0.0, 0.0, 0.0]
+    rotation: [-0.5, 0.5, -0.5, 0.5]
+
 # Adjust the translation (x, y, z in metres) and rotation
-# (quaternion [x, y, z, w]) based on actual sensor mounts.  Use a
-# calibration process to determine the extrinsic relationship
-# precisely.  The yaw, pitch and roll of the camera and LiDAR should
-# align so that their fields of view overlap as much as possible.
+# (quaternion [x, y, z, w]) based on actual sensor mounts. Use a
+# calibration process to determine the extrinsic relationship precisely.
+# The added optical-frame transform keeps the repository-local replay dataset,
+# ROS 2 bringup, and projective fusion code aligned on a single camera frame
+# convention that matches image projection math.
