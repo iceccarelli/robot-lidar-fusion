@@ -198,7 +198,7 @@ class SensorProcessor:
         timestamp: float | None,
         lin_vel: tuple[float, float, float],
     ) -> tuple[float, float, float]:
-        acc = (0.0, 0.0, 0.0)
+        acc: tuple[float, float, float] = (0.0, 0.0, 0.0)
         if (
             self._prev_lin_vel is not None
             and self._prev_timestamp is not None
@@ -207,19 +207,30 @@ class SensorProcessor:
             dt = timestamp - self._prev_timestamp
             if dt > 0.0:
                 try:
-                    acc = tuple(
-                        (lv - pv) / dt for lv, pv in zip(lin_vel, self._prev_lin_vel, strict=False)
+                    acc = (
+                        (lin_vel[0] - self._prev_lin_vel[0]) / dt,
+                        (lin_vel[1] - self._prev_lin_vel[1]) / dt,
+                        (lin_vel[2] - self._prev_lin_vel[2]) / dt,
                     )
                 except Exception:
                     acc = (0.0, 0.0, 0.0)
-
+    
         calib = self._config.sensor_calibration_factors
         if calib and len(calib) >= 9:
-            acc = tuple(float(c) * a for c, a in zip(calib[6:9], acc, strict=False))
-
+            acc = (
+                float(calib[6]) * acc[0],
+                float(calib[7]) * acc[1],
+                float(calib[8]) * acc[2],
+            )
+    
         if self._noise_std > 0.0:
-            acc = tuple(a + random.gauss(0.0, self._noise_std) for a in acc)
-        return cast(tuple[float, float, float], acc)
+            acc = (
+                acc[0] + random.gauss(0.0, self._noise_std),
+                acc[1] + random.gauss(0.0, self._noise_std),
+                acc[2] + random.gauss(0.0, self._noise_std),
+            )
+        return acc
+
 
     def _summarize_lidar_frame(self, frame: LidarFrame) -> dict[str, Any]:
         return {
