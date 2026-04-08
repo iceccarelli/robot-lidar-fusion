@@ -80,7 +80,8 @@ class ConsistencyVerifier:
                 # Verify monotonicity if we have a previous timestamp
                 if self._last_timestamp is not None and ts_val <= self._last_timestamp:
                     self.errors.append(
-                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}")
+                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}"
+                    )
                 self._last_timestamp = ts_val
         # Check positions
         positions = state.get("positions")
@@ -204,7 +205,9 @@ class ConsistencyVerifier:
                 else:
                     for idx, waypoint in enumerate(plan):
                         if not isinstance(waypoint, (list, tuple)) or len(waypoint) < 2:
-                            self.errors.append(f"Invalid waypoint {idx} in {field_name}: {waypoint}")
+                            self.errors.append(
+                                f"Invalid waypoint {idx} in {field_name}: {waypoint}"
+                            )
                             continue
                         for coord_idx, value in enumerate(waypoint[:2]):
                             try:
@@ -229,6 +232,8 @@ class ConsistencyVerifier:
                     try:
                         _ = float(value)
                     except Exception:
-                        self.errors.append(f"Invalid locomotion command for joint {joint_id}: {value}")
+                        self.errors.append(
+                            f"Invalid locomotion command for joint {joint_id}: {value}"
+                        )
 
         return not self.errors

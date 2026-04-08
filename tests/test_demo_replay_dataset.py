@@ -15,10 +15,7 @@ DATASET_PATH = (
     / "fusion_demo_sequence.json"
 )
 METADATA_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "datasets"
-    / "sample_bags"
-    / "metadata.yaml"
+    Path(__file__).resolve().parent.parent / "datasets" / "sample_bags" / "metadata.yaml"
 )
 
 

@@ -96,7 +96,9 @@ def _make_camera_frame() -> CameraFrame:
 
 
 def test_load_calibration_store_resolves_optical_frame_path() -> None:
-    store = load_calibration_store("calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml")
+    store = load_calibration_store(
+        "calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml"
+    )
     transform = store.get_transform("os_sensor", "camera_color_optical_frame")
     point = transform.transform_point((2.0, 0.2, 0.0))
 
@@ -107,7 +109,9 @@ def test_load_calibration_store_resolves_optical_frame_path() -> None:
 
 
 def test_projective_fusion_projects_points_into_image_space() -> None:
-    store = load_calibration_store("calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml")
+    store = load_calibration_store(
+        "calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml"
+    )
     fusion = ProjectiveFusion(store, max_offset_s=0.05)
 
     result = fusion.project_pair(_make_lidar_frame(), _make_camera_frame())
@@ -119,7 +123,9 @@ def test_projective_fusion_projects_points_into_image_space() -> None:
 
 
 def test_object_fusion_and_evaluation_produce_measurable_outputs() -> None:
-    store = load_calibration_store("calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml")
+    store = load_calibration_store(
+        "calibration/camera_intrinsics.yaml", "calibration/extrinsics.yaml"
+    )
     projection = ProjectiveFusion(store, max_offset_s=0.05).project_pair(
         _make_lidar_frame(),
         _make_camera_frame(),

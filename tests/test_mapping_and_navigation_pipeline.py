@@ -5,7 +5,6 @@ from robot_hw.mapping.occupancy_mapping import OccupancyMapper
 from robot_hw.planning.navigation_manager import NavigationManager
 from robot_hw.robot_config import load as load_config
 
-
 FUSED_STATE = {
     "timestamp": 1.0,
     "position": (0.0, 0.0),
@@ -86,7 +85,12 @@ def test_consistency_verifier_accepts_stage5_navigation_fields() -> None:
         **FUSED_STATE,
         "map": {"occupied_cells": 2, "lethal_cells": 2, "inflated_cells": 8},
         "nav2_costmap": {
-            "metadata": {"width": 10, "height": 10, "resolution": 0.1, "origin": {"x": 0.0, "y": 0.0}},
+            "metadata": {
+                "width": 10,
+                "height": 10,
+                "resolution": 0.1,
+                "origin": {"x": 0.0, "y": 0.0},
+            },
             "data": [0] * 100,
             "encoding": "costmap_2d",
         },

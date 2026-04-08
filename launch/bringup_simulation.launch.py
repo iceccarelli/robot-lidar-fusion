@@ -32,7 +32,9 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument(
                 "dataset",
-                default_value=str(repo_root / "datasets" / "sample_bags" / "fusion_demo_sequence.json"),
+                default_value=str(
+                    repo_root / "datasets" / "sample_bags" / "fusion_demo_sequence.json"
+                ),
                 description="Replay dataset used to validate the simulation-connected workflow.",
             ),
             DeclareLaunchArgument(

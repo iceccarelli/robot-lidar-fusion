@@ -13,7 +13,11 @@ def _make_planner():
     """Create a MissionPlanner with all required dependencies."""
     cfg = load_config()
     bm = BatteryManager(cfg.battery_capacity_wh, cfg.low_battery_threshold)
-    bm.update(BatteryState(voltage=48.0, current=1.0, temperature=25.0, soc=0.9, health=1.0, timestamp=0.0))
+    bm.update(
+        BatteryState(
+            voltage=48.0, current=1.0, temperature=25.0, soc=0.9, health=1.0, timestamp=0.0
+        )
+    )
     tm = ThermalManager(cfg.max_temperature_c, cfg.cooling_hysteresis_c)
     tm.update({"cpu": 30.0})
     hm = HazardManager(cfg)

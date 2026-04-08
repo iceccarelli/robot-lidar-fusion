@@ -65,17 +65,21 @@ def summarise_pair(lidar_frame: LidarFrame, camera_frame: CameraFrame) -> dict[s
         "sync_offset_seconds": abs(lidar_frame.timestamp - camera_frame.timestamp),
         "lidar_points": len(lidar_frame.points_xyz),
         "camera_resolution": (
-            camera_frame.image.get("width"),
-            camera_frame.image.get("height"),
-        )
-        if isinstance(camera_frame.image, dict)
-        else None,
+            (
+                camera_frame.image.get("width"),
+                camera_frame.image.get("height"),
+            )
+            if isinstance(camera_frame.image, dict)
+            else None
+        ),
         "proximity_m": proximity,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Replay the bundled robot-lidar-fusion demo dataset")
+    parser = argparse.ArgumentParser(
+        description="Replay the bundled robot-lidar-fusion demo dataset"
+    )
     parser.add_argument(
         "--dataset",
         type=Path,

@@ -55,10 +55,16 @@ def build_runtime_metrics(
         "fault_count": int(fault_count),
         "telemetry_count": int(telemetry_count),
         "navigation_status": navigation.get("status") if isinstance(navigation, dict) else None,
-        "global_plan_waypoints": len(state.get("global_plan", [])) if isinstance(state, dict) else 0,
+        "global_plan_waypoints": (
+            len(state.get("global_plan", [])) if isinstance(state, dict) else 0
+        ),
         "local_plan_waypoints": len(state.get("local_plan", [])) if isinstance(state, dict) else 0,
-        "occupied_cells": map_summary.get("occupied_cells") if isinstance(map_summary, dict) else None,
-        "inflated_cells": map_summary.get("inflated_cells") if isinstance(map_summary, dict) else None,
+        "occupied_cells": (
+            map_summary.get("occupied_cells") if isinstance(map_summary, dict) else None
+        ),
+        "inflated_cells": (
+            map_summary.get("inflated_cells") if isinstance(map_summary, dict) else None
+        ),
     }
 
 

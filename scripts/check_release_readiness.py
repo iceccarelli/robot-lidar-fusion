@@ -73,7 +73,7 @@ def main() -> None:
         "robot_hw/__init__.py",
     )
     changelog_version = extract_version(
-        r'^## \[([^\]]+)\]',
+        r"^## \[([^\]]+)\]",
         changelog_text,
         "CHANGELOG.md",
     )

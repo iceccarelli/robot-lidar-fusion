@@ -38,9 +38,7 @@ def evaluate_projection(
     projection_coverage_ratio = (
         projected_points_in_bounds / total_points if total_points > 0 else 0.0
     )
-    nearest_object_depth = (
-        min(obj.min_depth_m for obj in fused_objects) if fused_objects else None
-    )
+    nearest_object_depth = min(obj.min_depth_m for obj in fused_objects) if fused_objects else None
     return FusionMetrics(
         timestamp_offset_s=projection_result.timestamp_offset_s,
         lidar_points_total=total_points,

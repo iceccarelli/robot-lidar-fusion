@@ -15,7 +15,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DATASET = Path(__file__).resolve().parent.parent / "datasets" / "sample_bags" / "fusion_demo_sequence.json"
+DEFAULT_DATASET = (
+    Path(__file__).resolve().parent.parent
+    / "datasets"
+    / "sample_bags"
+    / "fusion_demo_sequence.json"
+)
 
 try:
     import rclpy
@@ -101,7 +106,9 @@ def build_debug_markers(header: Header, lidar_payload: dict[str, Any]) -> Marker
         marker.id = index
         marker.type = Marker.SPHERE
         marker.action = Marker.ADD
-        marker.pose.position = Point(x=float(point_xyz[0]), y=float(point_xyz[1]), z=float(point_xyz[2]))
+        marker.pose.position = Point(
+            x=float(point_xyz[0]), y=float(point_xyz[1]), z=float(point_xyz[2])
+        )
         marker.pose.orientation.w = 1.0
         marker.scale.x = 0.12
         marker.scale.y = 0.12
@@ -120,10 +127,16 @@ class DemoReplayPublisher(Node):
         self._dataset = load_dataset(dataset_path)
         self._frames = list(self._dataset.get("frames", []))
         self._replay_rate = max(float(replay_rate), 1e-6)
-        self._lidar_pub = self.create_publisher(PointCloud2, "/robot_lidar_fusion/demo/lidar_points", 10)
+        self._lidar_pub = self.create_publisher(
+            PointCloud2, "/robot_lidar_fusion/demo/lidar_points", 10
+        )
         self._image_pub = self.create_publisher(Image, "/robot_lidar_fusion/demo/camera_image", 10)
-        self._camera_info_pub = self.create_publisher(CameraInfo, "/robot_lidar_fusion/demo/camera_info", 10)
-        self._debug_pub = self.create_publisher(MarkerArray, "/robot_lidar_fusion/demo/fused_debug", 10)
+        self._camera_info_pub = self.create_publisher(
+            CameraInfo, "/robot_lidar_fusion/demo/camera_info", 10
+        )
+        self._debug_pub = self.create_publisher(
+            MarkerArray, "/robot_lidar_fusion/demo/fused_debug", 10
+        )
 
     def run(self) -> None:
         self.get_logger().info(
@@ -133,8 +146,14 @@ class DemoReplayPublisher(Node):
         for item in self._frames:
             lidar_payload = item["lidar"]
             camera_payload = item["camera"]
-            lidar_header = Header(frame_id=str(lidar_payload["frame_id"]), stamp=to_ros_time(float(lidar_payload["timestamp"])))
-            camera_header = Header(frame_id=str(camera_payload["frame_id"]), stamp=to_ros_time(float(camera_payload["timestamp"])))
+            lidar_header = Header(
+                frame_id=str(lidar_payload["frame_id"]),
+                stamp=to_ros_time(float(lidar_payload["timestamp"])),
+            )
+            camera_header = Header(
+                frame_id=str(camera_payload["frame_id"]),
+                stamp=to_ros_time(float(camera_payload["timestamp"])),
+            )
             self._lidar_pub.publish(build_pointcloud(lidar_header, lidar_payload))
             self._image_pub.publish(build_image(camera_header, camera_payload))
             self._camera_info_pub.publish(build_camera_info(camera_header, camera_payload))
@@ -157,8 +176,12 @@ class DemoReplayPublisher(Node):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Publish the bundled robot-lidar-fusion demo dataset as ROS 2 topics")
-    parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET, help="Path to the JSON replay dataset")
+    parser = argparse.ArgumentParser(
+        description="Publish the bundled robot-lidar-fusion demo dataset as ROS 2 topics"
+    )
+    parser.add_argument(
+        "--dataset", type=Path, default=DEFAULT_DATASET, help="Path to the JSON replay dataset"
+    )
     parser.add_argument("--rate", type=float, default=1.0, help="Replay rate multiplier")
     args = parser.parse_args()
 

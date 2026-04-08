@@ -58,7 +58,9 @@ def _adapter_payload(simulator: str) -> dict[str, Any]:
 
 
 def run_scenario(scenario: BenchmarkScenario) -> dict[str, Any]:
-    orchestrator = RobotOrchestrator(cycle_time=0.001, total_memory_bytes=1024 * 1024, battery_capacity_wh=100.0)
+    orchestrator = RobotOrchestrator(
+        cycle_time=0.001, total_memory_bytes=1024 * 1024, battery_capacity_wh=100.0
+    )
     orchestrator.submit_goal({"x": scenario.goal_xy[0], "y": scenario.goal_xy[1]})
     orchestrator.run(num_cycles=scenario.cycles)
 
@@ -90,7 +92,9 @@ def main() -> None:
     for scenario in SCENARIOS:
         artifact = run_scenario(scenario)
         output_path = artifact_dir / f"{scenario.name}.json"
-        output_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         summary.append(
             {
                 "name": scenario.name,

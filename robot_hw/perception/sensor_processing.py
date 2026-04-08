@@ -199,7 +199,11 @@ class SensorProcessor:
         lin_vel: tuple[float, float, float],
     ) -> tuple[float, float, float]:
         acc = (0.0, 0.0, 0.0)
-        if self._prev_lin_vel is not None and self._prev_timestamp is not None and timestamp is not None:
+        if (
+            self._prev_lin_vel is not None
+            and self._prev_timestamp is not None
+            and timestamp is not None
+        ):
             dt = timestamp - self._prev_timestamp
             if dt > 0.0:
                 try:
@@ -236,14 +240,22 @@ class SensorProcessor:
 
     def _merge_proximity(self, current: Any, candidate: float) -> float:
         try:
-            return min(float(current), float(candidate)) if current is not None else float(candidate)
+            return (
+                min(float(current), float(candidate)) if current is not None else float(candidate)
+            )
         except Exception:
             return float(candidate)
 
-    def _fuse_lidar_camera(self, lidar_frame: LidarFrame, camera_frame: CameraFrame) -> dict[str, Any]:
+    def _fuse_lidar_camera(
+        self, lidar_frame: LidarFrame, camera_frame: CameraFrame
+    ) -> dict[str, Any]:
         timestamp_offset = abs(lidar_frame.timestamp - camera_frame.timestamp)
         fusion: dict[str, Any] = {
-            "status": "synchronized" if timestamp_offset <= self._fusion_max_offset_s else "unsynchronized",
+            "status": (
+                "synchronized"
+                if timestamp_offset <= self._fusion_max_offset_s
+                else "unsynchronized"
+            ),
             "timestamp_offset_s": timestamp_offset,
             "max_offset_s": self._fusion_max_offset_s,
             "frame_pair": f"{lidar_frame.frame_id}->{camera_frame.frame_id}",

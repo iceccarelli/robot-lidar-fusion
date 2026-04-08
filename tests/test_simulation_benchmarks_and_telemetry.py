@@ -78,4 +78,6 @@ def test_benchmark_scenario_produces_measurable_artifact_payload() -> None:
     assert len(artifact["runtime_metrics"]) == 2
     assert isinstance(artifact["structured_logs"], list)
     assert len(artifact["telemetry_messages"]) == 2
-    assert artifact["final_state"]["navigation"]["goal"] == [1.0, 0.0] or artifact["final_state"]["navigation"]["goal"] == (1.0, 0.0)
+    assert artifact["final_state"]["navigation"]["goal"] == [1.0, 0.0] or artifact["final_state"][
+        "navigation"
+    ]["goal"] == (1.0, 0.0)

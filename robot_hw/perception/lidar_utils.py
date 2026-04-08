@@ -18,8 +18,9 @@ import math
 from collections.abc import Iterable
 
 
-def compute_proximity(points: Iterable[tuple[float, float, float]],
-                      fov_degrees: float = 60.0) -> float | None:
+def compute_proximity(
+    points: Iterable[tuple[float, float, float]], fov_degrees: float = 60.0
+) -> float | None:
     """Compute the distance to the nearest obstacle in the forward field of view.
 
     Parameters

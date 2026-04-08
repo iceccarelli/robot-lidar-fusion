@@ -52,6 +52,7 @@ class BatteryState:
         Time at which the measurement was taken, expressed in
         seconds (e.g., epoch time or monotonic time).
     """
+
     voltage: float
     current: float
     temperature: float
@@ -143,12 +144,14 @@ class BatteryManager:
             latest_ts = max(s.timestamp for s in states)
         except Exception:
             return
-        aggregated = BatteryState(voltage=avg_voltage,
-                                  current=avg_current,
-                                  temperature=avg_temperature,
-                                  soc=avg_soc,
-                                  health=avg_health,
-                                  timestamp=latest_ts)
+        aggregated = BatteryState(
+            voltage=avg_voltage,
+            current=avg_current,
+            temperature=avg_temperature,
+            soc=avg_soc,
+            health=avg_health,
+            timestamp=latest_ts,
+        )
         self._last_state = self.state
         self.state = aggregated
 
@@ -272,7 +275,11 @@ class BatteryManager:
         if self.pack_states:
             self.update_packs(self.pack_states)
         else:
-            self.state.soc = min(self.state.soc + energy_recovered / (self.capacity_wh * max(self.state.health, 1e-3)), 1.0)
+            self.state.soc = min(
+                self.state.soc
+                + energy_recovered / (self.capacity_wh * max(self.state.health, 1e-3)),
+                1.0,
+            )
         # Invoke callbacks
         for cb in list(self._regen_callbacks):
             with contextlib.suppress(Exception):
@@ -292,7 +299,9 @@ class BatteryManager:
     # ------------------------------------------------------------------
     # Advanced energy estimation and scheduling helpers
     # ------------------------------------------------------------------
-    def estimate_task_energy(self, instructions: list[Any], current_state: dict[str, Any] | None = None) -> float:
+    def estimate_task_energy(
+        self, instructions: list[Any], current_state: dict[str, Any] | None = None
+    ) -> float:
         """Estimate the energy required to execute a set of joint instructions.
 
         This helper computes a rough energy cost for moving the joints

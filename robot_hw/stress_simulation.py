@@ -63,12 +63,14 @@ def run_simulation(profile: str, cycles: int = 100) -> None:
     os.environ["ENVIRONMENT_PROFILE"] = profile.upper()
     # Load configuration and instantiate orchestrator with derived parameters
     config = load_config()
-    orch = RobotOrchestrator(cycle_time=config.cycle_time_s,
-                             total_memory_bytes=config.total_memory_bytes,
-                             battery_capacity_wh=config.battery_capacity_wh,
-                             max_temperature=config.max_temperature_c,
-                             max_velocity=max(config.max_velocity_per_joint) if config.max_velocity_per_joint else 1.0,
-                             max_torque=max(config.max_torque_per_joint) if config.max_torque_per_joint else 1.0)
+    orch = RobotOrchestrator(
+        cycle_time=config.cycle_time_s,
+        total_memory_bytes=config.total_memory_bytes,
+        battery_capacity_wh=config.battery_capacity_wh,
+        max_temperature=config.max_temperature_c,
+        max_velocity=max(config.max_velocity_per_joint) if config.max_velocity_per_joint else 1.0,
+        max_torque=max(config.max_torque_per_joint) if config.max_torque_per_joint else 1.0,
+    )
     # Submit an initial goal
     orch.submit_goal(random_goal())
     # Run the orchestrator for the desired number of cycles, injecting
@@ -93,8 +95,12 @@ def run_simulation(profile: str, cycles: int = 100) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run digital twin stress simulation")
-    parser.add_argument("--profile", type=str, default="GENERAL",
-                        help="Environment profile to simulate (MINING, UNDERWATER, SPACE, FORESTRY, GENERAL)")
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default="GENERAL",
+        help="Environment profile to simulate (MINING, UNDERWATER, SPACE, FORESTRY, GENERAL)",
+    )
     parser.add_argument("--cycles", type=int, default=50, help="Number of control cycles to run")
     args = parser.parse_args()
     run_simulation(args.profile, args.cycles)

@@ -70,14 +70,22 @@ class ProjectiveFusion:
         camera_frame: CameraFrame,
         timestamp_offset_s: float | None = None,
     ) -> ProjectionResult:
-        timestamp_offset = abs(lidar_frame.timestamp - camera_frame.timestamp) if timestamp_offset_s is None else float(timestamp_offset_s)
+        timestamp_offset = (
+            abs(lidar_frame.timestamp - camera_frame.timestamp)
+            if timestamp_offset_s is None
+            else float(timestamp_offset_s)
+        )
         if timestamp_offset > self._max_offset_s:
             raise ValueError(
                 f"timestamp offset {timestamp_offset:.6f}s exceeds configured maximum {self._max_offset_s:.6f}s"
             )
 
-        camera_calibration = _resolve_camera_calibration(camera_frame, self._calibration_store.camera)
-        transform = self._calibration_store.get_transform(lidar_frame.frame_id, camera_frame.frame_id)
+        camera_calibration = _resolve_camera_calibration(
+            camera_frame, self._calibration_store.camera
+        )
+        transform = self._calibration_store.get_transform(
+            lidar_frame.frame_id, camera_frame.frame_id
+        )
         projected_points: list[ProjectedPoint] = []
         intensities = lidar_frame.intensities or []
 
@@ -89,7 +97,10 @@ class ProjectiveFusion:
             pixel_u = camera_calibration.fx * (cx / cz) + camera_calibration.cx
             pixel_v = camera_calibration.fy * (cy / cz) + camera_calibration.cy
             intensity = float(intensities[index]) if index < len(intensities) else None
-            in_bounds = 0.0 <= pixel_u < camera_calibration.width and 0.0 <= pixel_v < camera_calibration.height
+            in_bounds = (
+                0.0 <= pixel_u < camera_calibration.width
+                and 0.0 <= pixel_v < camera_calibration.height
+            )
             projected_points.append(
                 ProjectedPoint(
                     lidar_point_xyz=tuple(map(float, point_xyz)),
@@ -120,14 +131,22 @@ def _resolve_camera_calibration(
 
     width, height = _infer_image_shape(camera_frame.image)
     return CameraCalibration(
-        width=int(intrinsics.get("width", width if width is not None else default_calibration.width)),
-        height=int(intrinsics.get("height", height if height is not None else default_calibration.height)),
+        width=int(
+            intrinsics.get("width", width if width is not None else default_calibration.width)
+        ),
+        height=int(
+            intrinsics.get("height", height if height is not None else default_calibration.height)
+        ),
         fx=float(intrinsics.get("fx", default_calibration.fx)),
         fy=float(intrinsics.get("fy", default_calibration.fy)),
         cx=float(intrinsics.get("cx", default_calibration.cx)),
         cy=float(intrinsics.get("cy", default_calibration.cy)),
-        distortion=tuple(float(value) for value in intrinsics.get("D", default_calibration.distortion)),
-        distortion_model=str(intrinsics.get("distortion_model", default_calibration.distortion_model)),
+        distortion=tuple(
+            float(value) for value in intrinsics.get("D", default_calibration.distortion)
+        ),
+        distortion_model=str(
+            intrinsics.get("distortion_model", default_calibration.distortion_model)
+        ),
     )
 
 

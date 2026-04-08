@@ -70,7 +70,9 @@ class NavigationManager:
         summary = self._mapper.summarize(occupancy, costmap)
         signature = self._build_plan_signature(state, current, self._goal, summary)
 
-        replanning_reason = "map_or_goal_change" if signature != self._last_plan_signature else "tracking"
+        replanning_reason = (
+            "map_or_goal_change" if signature != self._last_plan_signature else "tracking"
+        )
         if signature != self._last_plan_signature or not self._current_plan:
             self._current_plan = self._compute_plan(current, self._goal, costmap)
             self._last_plan_signature = signature

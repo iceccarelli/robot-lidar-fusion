@@ -107,12 +107,15 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             soc = max(0.0, 1.0 - 0.001 * cycle + random.uniform(-0.01, 0.01))
             temperature = 25.0 + 0.2 * cycle + random.uniform(-1.0, 1.0)
             from power.battery_management import BatteryState
-            battery_state = BatteryState(voltage=voltage,
-                                         current=current,
-                                         temperature=temperature,
-                                         soc=soc,
-                                         health=1.0,
-                                         timestamp=ts)
+
+            battery_state = BatteryState(
+                voltage=voltage,
+                current=current,
+                temperature=temperature,
+                soc=soc,
+                health=1.0,
+                timestamp=ts,
+            )
             self.battery_manager.update(battery_state)
             # Thermal: per-joint temperatures with noise
             temp_data: dict[str, float] = {}
@@ -133,7 +136,9 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             if tasks_to_process:
                 # First order tasks by distance to minimise travel
                 try:
-                    ordered = self.task_mapper.assign_task_sequence(tasks_to_process, self.current_state)
+                    ordered = self.task_mapper.assign_task_sequence(
+                        tasks_to_process, self.current_state
+                    )
                 except Exception:
                     ordered = list(tasks_to_process)
                 # Then prioritise based on estimated energy and thermal load
@@ -142,7 +147,7 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
                         ordered,
                         battery_manager=self.battery_manager,
                         thermal_manager=self.thermal_manager,
-                        current_state=self.current_state
+                        current_state=self.current_state,
                     )
                 except Exception:
                     prioritized = list(ordered)
@@ -154,9 +159,15 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
                         print(f"[Tasks] Error mapping task {task.id}: {e}")
                         continue
                     # Estimate resource costs
-                    energy = self.battery_manager.estimate_task_energy(instructions, self.current_state)
-                    thermal_load = self.thermal_manager.estimate_task_thermal_load(instructions, self.current_state)
-                    print(f"[Tasks] Estimated energy: {energy:.3f} Wh, thermal load: {thermal_load:.3f} °C")
+                    energy = self.battery_manager.estimate_task_energy(
+                        instructions, self.current_state
+                    )
+                    thermal_load = self.thermal_manager.estimate_task_thermal_load(
+                        instructions, self.current_state
+                    )
+                    print(
+                        f"[Tasks] Estimated energy: {energy:.3f} Wh, thermal load: {thermal_load:.3f} °C"
+                    )
                     # Check battery and thermal limits
                     if self.battery_manager.should_defer_task(energy):
                         print(f"[Battery] Deferring task {task.id} (energy {energy:.2f} Wh)")
@@ -177,18 +188,25 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
                 print(f"[JointSync] Applying commands: {desired_joint_commands}")
                 # Build JointCommand objects on the fly
                 from control.joint_synchronization import JointCommand
-                jc_map = {jid: JointCommand(position=cmd.get("position"),
-                                            velocity=cmd.get("velocity"),
-                                            torque=cmd.get("torque"))
-                          for jid, cmd in desired_joint_commands.items()}
+
+                jc_map = {
+                    jid: JointCommand(
+                        position=cmd.get("position"),
+                        velocity=cmd.get("velocity"),
+                        torque=cmd.get("torque"),
+                    )
+                    for jid, cmd in desired_joint_commands.items()
+                }
                 # Build the current joint state for the synchroniser.  This
                 # includes only the position and velocity for joints in
                 # ``desired_joint_commands``.  Environment hazard keys are
                 # appended to allow the synchroniser to merge them into
                 # sensor feedback for safety checks.
                 joint_state_only = {
-                    jid: {"position": self.current_state.get("positions", {}).get(jid),
-                          "velocity": self.current_state.get("velocities", {}).get(jid)}
+                    jid: {
+                        "position": self.current_state.get("positions", {}).get(jid),
+                        "velocity": self.current_state.get("velocities", {}).get(jid),
+                    }
                     for jid in desired_joint_commands
                 }
                 # Propagate hazard fields under an environment key to keep types consistent
@@ -234,7 +252,11 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
             if cycle % 10 == 0:
                 remaining_runtime = self.battery_manager.predict_runtime()
                 mem_ok = self.memory_manager.check_health()
-                print(f"[Report] Predicted runtime: {remaining_runtime:.2f} s" if remaining_runtime else "[Report] Runtime prediction unavailable")
+                print(
+                    f"[Report] Predicted runtime: {remaining_runtime:.2f} s"
+                    if remaining_runtime
+                    else "[Report] Runtime prediction unavailable"
+                )
                 print(f"[Report] Memory health: {'OK' if mem_ok else 'Low'}")
             # Sleep to maintain timing
             elapsed = time.perf_counter() - cycle_start
@@ -243,9 +265,9 @@ class VerboseRobotOrchestrator(RobotOrchestrator):
                 time.sleep(remaining)
 
 
-def random_task_submitter(orchestrator: VerboseRobotOrchestrator,
-                          interval: float,
-                          run_event: threading.Event) -> None:
+def random_task_submitter(
+    orchestrator: VerboseRobotOrchestrator, interval: float, run_event: threading.Event
+) -> None:
     """Submit random tasks with random joint commands at a fixed interval."""
     cfg = load_config()
     joint_ids = list(cfg.joint_ids)
@@ -273,12 +295,14 @@ def random_task_submitter(orchestrator: VerboseRobotOrchestrator,
 
 def main() -> None:
     cfg = load_config()
-    orchestrator = VerboseRobotOrchestrator(cycle_time=cfg.cycle_time_s,
-                                           total_memory_bytes=cfg.total_memory_bytes,
-                                           battery_capacity_wh=cfg.battery_capacity_wh,
-                                           max_temperature=cfg.max_temperature_c,
-                                           max_velocity=max(cfg.max_velocity_per_joint) if cfg.max_velocity_per_joint else 1.0,
-                                           max_torque=max(cfg.max_torque_per_joint) if cfg.max_torque_per_joint else 1.0)
+    orchestrator = VerboseRobotOrchestrator(
+        cycle_time=cfg.cycle_time_s,
+        total_memory_bytes=cfg.total_memory_bytes,
+        battery_capacity_wh=cfg.battery_capacity_wh,
+        max_temperature=cfg.max_temperature_c,
+        max_velocity=max(cfg.max_velocity_per_joint) if cfg.max_velocity_per_joint else 1.0,
+        max_torque=max(cfg.max_torque_per_joint) if cfg.max_torque_per_joint else 1.0,
+    )
     NUM_CYCLES = 100
     TASK_SUBMIT_INTERVAL = 0.05
     # Run orchestrator in background
@@ -289,7 +313,11 @@ def main() -> None:
     # Run random task submitter
     run_event = threading.Event()
     run_event.set()
-    submitter_thread = threading.Thread(target=random_task_submitter, args=(orchestrator, TASK_SUBMIT_INTERVAL, run_event), daemon=True)
+    submitter_thread = threading.Thread(
+        target=random_task_submitter,
+        args=(orchestrator, TASK_SUBMIT_INTERVAL, run_event),
+        daemon=True,
+    )
     submitter_thread.start()
     # Wait for orchestrator to finish
     orch_thread.join()

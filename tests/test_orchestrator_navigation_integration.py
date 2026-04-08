@@ -4,7 +4,9 @@ from robot_hw.robot_orchestrator import RobotOrchestrator
 
 
 def test_orchestrator_emits_navigation_state_after_goal_submission() -> None:
-    orchestrator = RobotOrchestrator(cycle_time=0.001, total_memory_bytes=1024 * 1024, battery_capacity_wh=100.0)
+    orchestrator = RobotOrchestrator(
+        cycle_time=0.001, total_memory_bytes=1024 * 1024, battery_capacity_wh=100.0
+    )
     orchestrator.submit_goal({"x": 1.5, "y": 0.0})
 
     orchestrator.run(num_cycles=1)

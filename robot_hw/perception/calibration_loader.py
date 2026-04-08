@@ -117,8 +117,12 @@ class CalibrationStore:
     def _find_path(self, source_frame: str, target_frame: str) -> list[RigidTransform] | None:
         adjacency: dict[str, list[tuple[str, RigidTransform]]] = {}
         for transform in self.transforms:
-            adjacency.setdefault(transform.child_frame, []).append((transform.parent_frame, transform))
-            adjacency.setdefault(transform.parent_frame, []).append((transform.child_frame, transform.inverse()))
+            adjacency.setdefault(transform.child_frame, []).append(
+                (transform.parent_frame, transform)
+            )
+            adjacency.setdefault(transform.parent_frame, []).append(
+                (transform.child_frame, transform.inverse())
+            )
 
         queue: list[tuple[str, list[RigidTransform]]] = [(source_frame, [])]
         visited = {source_frame}
@@ -260,7 +264,7 @@ def _normalise_quaternion(
     magnitude_sq = x * x + y * y + z * z + w * w
     if magnitude_sq <= 0.0:
         return (0.0, 0.0, 0.0, 1.0)
-    magnitude = magnitude_sq ** 0.5
+    magnitude = magnitude_sq**0.5
     return (x / magnitude, y / magnitude, z / magnitude, w / magnitude)
 
 

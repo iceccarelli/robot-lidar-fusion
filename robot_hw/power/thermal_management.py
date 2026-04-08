@@ -138,7 +138,9 @@ class ThermalManager:
     # ------------------------------------------------------------------
     # Advanced thermal estimation and throttling helpers
     # ------------------------------------------------------------------
-    def estimate_task_thermal_load(self, instructions: list[Any], current_state: dict[str, Any] | None = None) -> float:
+    def estimate_task_thermal_load(
+        self, instructions: list[Any], current_state: dict[str, Any] | None = None
+    ) -> float:
         """Estimate the thermal load of executing a set of joint instructions.
 
         A simplified thermal model is used: the predicted temperature

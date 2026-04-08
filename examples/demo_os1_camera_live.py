@@ -19,6 +19,7 @@ To exit the loop press Ctrl‑C.  This script is intended for manual
 testing and diagnostics during development; it does not control the
 robot or send any actuator commands.
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,10 +36,10 @@ from robot_hw.robot_config import load as load_config
 def main() -> None:
     config = load_config()
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger('demo')
-    use_ros = getattr(config, 'use_ros2', True)
-    enable_lidar = getattr(config, 'enable_lidar', False)
-    enable_camera = getattr(config, 'enable_camera', False)
+    logger = logging.getLogger("demo")
+    use_ros = getattr(config, "use_ros2", True)
+    enable_lidar = getattr(config, "enable_lidar", False)
+    enable_camera = getattr(config, "enable_camera", False)
     if not (enable_lidar or enable_camera):
         logger.warning("LiDAR and camera ingestion are both disabled in the configuration.")
     time_sync = TimeSync()
@@ -67,7 +68,9 @@ def main() -> None:
                         camera_info_topic=config.camera_info_topic,
                     )
                     logger.info(
-                        "Starting ROS2 sensor I/O with topics %s, %s", config.lidar_topic, config.camera_topic
+                        "Starting ROS2 sensor I/O with topics %s, %s",
+                        config.lidar_topic,
+                        config.camera_topic,
                     )
                 except Exception as e:
                     logger.error(
@@ -102,12 +105,16 @@ def main() -> None:
 
                 def get_latest_lidar_frame(self) -> LidarFrame | None:
                     return (
-                        self._lidar_io.get_latest_lidar_frame() if self._lidar_io is not None else None
+                        self._lidar_io.get_latest_lidar_frame()
+                        if self._lidar_io is not None
+                        else None
                     )
 
                 def get_latest_camera_frame(self) -> CameraFrame | None:
                     return (
-                        self._camera_io.get_latest_camera_frame() if self._camera_io is not None else None
+                        self._camera_io.get_latest_camera_frame()
+                        if self._camera_io is not None
+                        else None
                     )
 
             lidar_io = None
@@ -122,7 +129,9 @@ def main() -> None:
                 logger.info("Initialised direct LiDAR ingestion from %s", config.lidar_ip)
             if enable_camera:
                 camera_io = UvcCameraSensorIO(device=config.camera_device)
-                logger.info("Initialised direct camera ingestion on device %s", config.camera_device)
+                logger.info(
+                    "Initialised direct camera ingestion on device %s", config.camera_device
+                )
             sensor_io = _DirectProxy(lidar_io, camera_io)
         if sensor_io is None:
             logger.error("Failed to initialise sensor ingestion; exiting.")
@@ -134,6 +143,7 @@ def main() -> None:
         # Attempt to import OpenCV for optional preview
         try:
             import cv2  # type: ignore
+
             show_preview = True
         except Exception:
             cv2 = None  # type: ignore
@@ -149,7 +159,7 @@ def main() -> None:
                 last_cam_ts = camera_frame.timestamp
                 if show_preview and cv2 is not None and camera_frame.image is not None:
                     try:
-                        cv2.imshow('Camera Preview', camera_frame.image)
+                        cv2.imshow("Camera Preview", camera_frame.image)
                         cv2.waitKey(1)
                     except Exception:
                         pass
@@ -160,7 +170,11 @@ def main() -> None:
                 last_lidar_ts = lidar_frame.timestamp
                 # Compute proximity
                 prox = compute_proximity(lidar_frame.points_xyz)
-                msg = f"LiDAR points: {len(lidar_frame.points_xyz)}, Proximity: {prox:.2f} m" if prox is not None else f"LiDAR points: {len(lidar_frame.points_xyz)}"
+                msg = (
+                    f"LiDAR points: {len(lidar_frame.points_xyz)}, Proximity: {prox:.2f} m"
+                    if prox is not None
+                    else f"LiDAR points: {len(lidar_frame.points_xyz)}"
+                )
                 # Match with camera
                 sync_res = time_sync.match(lidar_frame)
                 if sync_res.camera_frame is not None and sync_res.offset is not None:
@@ -174,10 +188,11 @@ def main() -> None:
             sensor_io.stop()
         try:
             import cv2  # type: ignore
+
             cv2.destroyAllWindows()
         except Exception:
             pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -78,7 +78,9 @@ class OccupancyMapper:
                     gy = oy + dy
                     if not occupancy_grid.in_bounds(gx, gy):
                         continue
-                    distance = hypot(dx * occupancy_grid.resolution_m, dy * occupancy_grid.resolution_m)
+                    distance = hypot(
+                        dx * occupancy_grid.resolution_m, dy * occupancy_grid.resolution_m
+                    )
                     if distance > self._inflation_radius_m:
                         continue
                     cost = self._inflation_cost(distance)
@@ -106,9 +108,13 @@ class OccupancyMapper:
         }
 
     def summarize(self, occupancy_grid: GridMap, costmap: GridMap) -> dict[str, Any]:
-        occupied = sum(1 for row in occupancy_grid.data for value in row if value >= self._obstacle_cost)
+        occupied = sum(
+            1 for row in occupancy_grid.data for value in row if value >= self._obstacle_cost
+        )
         lethal = sum(1 for row in costmap.data for value in row if value >= self._obstacle_cost)
-        inflated = sum(1 for row in costmap.data for value in row if 0 < value < self._obstacle_cost)
+        inflated = sum(
+            1 for row in costmap.data for value in row if 0 < value < self._obstacle_cost
+        )
         return {
             "grid": {
                 "width": occupancy_grid.width,

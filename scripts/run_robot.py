@@ -37,7 +37,9 @@ def main() -> None:
         total_memory_bytes=config.total_memory_bytes,
         battery_capacity_wh=config.battery_capacity_wh,
     )
-    print(f"Starting robot control loop for {args.cycles} cycles at {1/config.cycle_time:.0f} Hz...")
+    print(
+        f"Starting robot control loop for {args.cycles} cycles at {1/config.cycle_time:.0f} Hz..."
+    )
     orchestrator.run(num_cycles=args.cycles)
     print("Control loop finished.")
 

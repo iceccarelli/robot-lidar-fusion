@@ -38,7 +38,9 @@ class ObjectFusion:
         self._min_cluster_size = int(min_cluster_size)
 
     def fuse(self, projection_result: ProjectionResult) -> list[FusedObject]:
-        candidates = [point for point in projection_result.projected_points if point.in_image_bounds]
+        candidates = [
+            point for point in projection_result.projected_points if point.in_image_bounds
+        ]
         clusters = _cluster_projected_points(candidates, pixel_radius=self._pixel_radius)
 
         fused_objects: list[FusedObject] = []

@@ -37,7 +37,9 @@ class PredictiveController:
         self._config = config
         # Internal state for the predictor could be stored here
 
-    def predict_orientation(self, current_orientation: tuple[float, float, float], raw_data: dict[str, Any]) -> tuple[float, float, float]:
+    def predict_orientation(
+        self, current_orientation: tuple[float, float, float], raw_data: dict[str, Any]
+    ) -> tuple[float, float, float]:
         """Predict the next orientation of the robot.
 
         This minimal implementation simply returns the provided
