@@ -241,7 +241,10 @@ class RobotOrchestrator:
                         self.sensor_io = None
                 else:
                     # Direct SDK ingestion: instantiate separate I/O objects
-                    from perception.sensor_io_direct import OusterSDKSensorIO, UvcCameraSensorIO  # type: ignore
+                    from perception.sensor_io_direct import (  # type: ignore
+                        OusterSDKSensorIO,
+                        UvcCameraSensorIO,
+                    )
 
                     if self.config.enable_lidar:
                         try:

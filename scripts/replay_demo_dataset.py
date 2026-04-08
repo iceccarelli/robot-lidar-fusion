@@ -9,6 +9,8 @@ present, the script still validates dataset structure, timestamp
 synchronisation, and early fusion outputs locally.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse

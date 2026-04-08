@@ -11,10 +11,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+
+from launch import LaunchDescription
 
 
 def generate_launch_description() -> LaunchDescription:

@@ -5,6 +5,8 @@ orchestrator plus simulator adapter contracts. It emits JSON artifacts that can
 be archived by CI for regression tracking and release-readiness evidence.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import json

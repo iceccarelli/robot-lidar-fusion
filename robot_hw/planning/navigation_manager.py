@@ -135,7 +135,7 @@ class NavigationManager:
         hazard_flags = {}
         if isinstance(state, dict) and isinstance(state.get("hazard_flags"), dict):
             hazard_flags = state["hazard_flags"]
-        risk_markers = tuple(sorted(str(key) for key in hazard_flags.keys()))
+        risk_markers = tuple(sorted(str(key) for key in hazard_flags))
         return (
             round(current[0], 2),
             round(current[1], 2),

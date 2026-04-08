@@ -215,7 +215,7 @@ class SensorProcessor:
 
         calib = self._config.sensor_calibration_factors
         if calib and len(calib) >= 9:
-            acc = tuple(float(c) * a for c, a in zip(calib[6:9], acc))
+            acc = tuple(float(c) * a for c, a in zip(calib[6:9], acc, strict=False))
 
         if self._noise_std > 0.0:
             acc = tuple(a + random.gauss(0.0, self._noise_std) for a in acc)

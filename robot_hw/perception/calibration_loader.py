@@ -49,7 +49,7 @@ class RigidTransform:
             [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)],
         ]
 
-    def inverse(self) -> "RigidTransform":
+    def inverse(self) -> RigidTransform:
         rotation = self.rotation_matrix()
         rotation_t = [
             [rotation[0][0], rotation[1][0], rotation[2][0]],

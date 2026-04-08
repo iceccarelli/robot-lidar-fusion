@@ -54,7 +54,10 @@ def main() -> None:
         use_direct = False
         if use_ros and (enable_lidar or enable_camera):
             try:
-                from robot_hw.perception.sensor_io_ros2 import ROS2_AVAILABLE, Ros2SensorIO  # type: ignore
+                from robot_hw.perception.sensor_io_ros2 import (  # type: ignore
+                    ROS2_AVAILABLE,
+                    Ros2SensorIO,
+                )
             except Exception:
                 ROS2_AVAILABLE = False  # type: ignore
             if not ROS2_AVAILABLE:
@@ -82,7 +85,10 @@ def main() -> None:
             use_direct = True
 
         if use_direct:
-            from robot_hw.perception.sensor_io_direct import OusterSDKSensorIO, UvcCameraSensorIO  # type: ignore
+            from robot_hw.perception.sensor_io_direct import (  # type: ignore
+                OusterSDKSensorIO,
+                UvcCameraSensorIO,
+            )
 
             class _DirectProxy:
                 """Simple wrapper to unify LiDAR and camera ingestion classes."""

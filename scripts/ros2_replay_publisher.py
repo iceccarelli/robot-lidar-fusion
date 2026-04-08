@@ -25,15 +25,15 @@ DEFAULT_DATASET = (
 try:
     import rclpy
     from builtin_interfaces.msg import Time as RosTime
+    from geometry_msgs.msg import Point
     from rclpy.node import Node
     from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
     from sensor_msgs_py import point_cloud2
     from std_msgs.msg import Header
     from visualization_msgs.msg import Marker, MarkerArray
-    from geometry_msgs.msg import Point
 except Exception as exc:  # pragma: no cover - environment dependent
     print(f"ros2 replay publisher requires a ROS 2 Python environment: {exc}", file=sys.stderr)
-    raise SystemExit(2)
+    raise SystemExit(2) from exc
 
 
 def load_dataset(path: Path) -> dict[str, Any]:

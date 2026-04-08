@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from benchmarks.run_benchmarks import run_scenario, BenchmarkScenario
+from benchmarks.run_benchmarks import BenchmarkScenario, run_scenario
 from robot_hw.sim_adapters.gazebo_adapter import GazeboAdapter
 from robot_hw.sim_adapters.isaac_sim_adapter import IsaacSimAdapter
 from robot_hw.telemetry.runtime_metrics import (

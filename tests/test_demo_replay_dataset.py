@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from robot_hw.perception.lidar_utils import compute_proximity
 from robot_hw.perception.sensor_frames import CameraFrame, LidarFrame
