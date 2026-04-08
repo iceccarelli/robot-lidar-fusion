@@ -52,6 +52,7 @@ class ActuatorCommand:
     torque : float | None
         Target torque or force; None to leave unchanged.
     """
+
     id: str
     position: float | None = None
     velocity: float | None = None
@@ -121,7 +122,9 @@ class HardwareSynchronizer:
 
         def apply_commands(self, commands: dict[str, ActuatorCommand]) -> None:
             for aid, cmd in commands.items():
-                state = self.states.setdefault(aid, {"position": 0.0, "velocity": 0.0, "torque": 0.0})
+                state = self.states.setdefault(
+                    aid, {"position": 0.0, "velocity": 0.0, "torque": 0.0}
+                )
                 # Update only fields that are provided
                 if cmd.position is not None:
                     state["position"] = float(cmd.position)
@@ -154,6 +157,7 @@ class HardwareSynchronizer:
             try:
                 import os
                 import random
+
                 env = os.getenv("ENVIRONMENT_PROFILE", "GENERAL").strip().upper()
                 # Define hazard injection per environment
                 if env == "MINING":
@@ -169,7 +173,9 @@ class HardwareSynchronizer:
                     snapshot["proximity"] = random.uniform(0.0, 2.0)
                     # Rare gas leaks or radiation underwater
                     snapshot["gas"] = random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
-                    snapshot["radiation"] = random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                    snapshot["radiation"] = (
+                        random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                    )
                     snapshot["pedestrian"] = False
                 elif env == "SPACE":
                     # High radiation and electrical hazards in space operations
@@ -186,7 +192,9 @@ class HardwareSynchronizer:
                     snapshot["human"] = random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
                 else:
                     # Generic environment: occasional obstacles but mostly clear
-                    snapshot["proximity"] = random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                    snapshot["proximity"] = (
+                        random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                    )
                     snapshot["pedestrian"] = bool(random.random() < 0.01)
             except Exception:
                 # If hazard injection fails, proceed with the basic snapshot
@@ -225,7 +233,8 @@ class HardwareSynchronizer:
                 self._hardware.apply_commands(commands)
         if hasattr(self._hardware, "read_sensors"):
             try:
-                return self._hardware.read_sensors()
+                sensor_state = self._hardware.read_sensors()
+                return dict(sensor_state)
             except Exception:
                 # TODO: log and propagate sensor reading errors
                 return {}

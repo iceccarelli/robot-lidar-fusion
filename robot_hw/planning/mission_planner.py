@@ -48,11 +48,13 @@ class MissionPlanner:
         while any hazard or fault is active.
     """
 
-    def __init__(self,
-                 config: RobotConfig,
-                 battery_manager: BatteryManager,
-                 thermal_manager: ThermalManager,
-                 hazard_manager: HazardManager) -> None:
+    def __init__(
+        self,
+        config: RobotConfig,
+        battery_manager: BatteryManager,
+        thermal_manager: ThermalManager,
+        hazard_manager: HazardManager,
+    ) -> None:
         self._config = config
         self._battery_manager = battery_manager
         self._thermal_manager = thermal_manager

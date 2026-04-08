@@ -1,66 +1,158 @@
 # Integration Guide
 
-This guide explains how to integrate the Robot LiDAR Fusion control stack with your specific robot hardware, sensors, and deployment environment. It covers hardware backends, sensor drivers, ROS2 integration, and deployment strategies.
+This guide explains how to integrate **robot-lidar-fusion** with your robot, sensors, and deployment environment while keeping expectations aligned with the current maturity of the repository.
 
-## Connecting Your Robot Hardware
+Today, the repository is best used as a **Python robotics foundation** with experimental ROS 2 and direct-sensor integration points. It is not yet a complete turn-key deployment stack for calibrated perception, mapping, and navigation. The goal of this guide is therefore to help you integrate safely and incrementally.
 
-The control stack communicates with hardware through the `HardwareSynchronizer` class in `robot_hw/core/hardware_synchronization.py`. The default implementation uses a `MockHardware` backend that simulates joint positions and sensor readings. To connect your robot, you need to implement a hardware backend that translates between the control stack's abstract commands and your robot's SDK.
+## Integration strategy
 
-Your hardware backend must provide two methods. `read_state()` returns a dictionary containing joint positions, velocities, and torques keyed by joint name. `write_commands(commands)` accepts a dictionary of joint commands and dispatches them to the physical actuators.
+A successful integration should proceed in stages rather than all at once.
+
+| Stage | Objective | Recommended outcome |
+|---|---|---|
+| 1 | Validate the package locally | Run the orchestrator, tests, and synthetic perception demo |
+| 2 | Replace mock hardware | Connect a real or simulated robot backend through the hardware abstraction |
+| 3 | Connect sensor streams | Feed LiDAR and camera data through ROS 2 or direct SDK pathways |
+| 4 | Validate calibration assets | Prepare intrinsics and extrinsics before enabling deeper fusion |
+| 5 | Add ROS 2-native workflows | Adopt launch, TF, replay, and visualisation once they are fully shipped |
+
+## Hardware backend integration
+
+The control loop communicates with robot hardware through the hardware synchronisation layer. The default repository path uses mock hardware, which is useful for development but must be replaced for real deployment.
+
+Your backend should expose methods equivalent to the following contract.
 
 ```python
 class MyRobotBackend:
     def read_state(self) -> dict:
-        # Read from your robot's SDK
-        return {"j1": {"position": 0.0, "velocity": 0.0, "torque": 0.0}, ...}
+        return {
+            "joint_1": {"position": 0.0, "velocity": 0.0, "torque": 0.0},
+            "joint_2": {"position": 0.0, "velocity": 0.0, "torque": 0.0},
+        }
 
     def write_commands(self, commands: dict) -> None:
-        # Send commands to your robot's SDK
         ...
 ```
 
-Pass your backend to the `HardwareSynchronizer` during orchestrator construction.
+The goal is to keep hardware-specific code outside the rest of the autonomy stack so that perception, planning, and power-management logic remain portable.
 
-## Connecting LiDAR Sensors
+## Sensor integration paths
 
-The perception subsystem supports two ingestion modes for LiDAR data.
+The perception subsystem currently supports two integration patterns.
 
-**ROS2 Mode** subscribes to the `/ouster/points` topic (or any topic publishing `sensor_msgs/PointCloud2`). This is the recommended mode for production deployments where you have a ROS2 driver running for your LiDAR.
+| Path | Current maturity | Best use |
+|---|---|---|
+| ROS 2 ingestion | Experimental | Recommended direction for long-term deployment |
+| Direct SDK ingestion | Experimental | Useful for lightweight prototyping and vendor-specific tests |
 
-**Direct SDK Mode** uses the Ouster Python SDK (`ouster-sdk`) to connect directly to the sensor over the network. This mode is useful for lightweight testing without a full ROS2 installation.
+### ROS 2 ingestion
 
-Both modes produce `LidarFrame` dataclasses containing the timestamp, frame ID, 3D point cloud, optional intensities, and metadata.
+The ROS 2 integration layer converts standard ROS 2 sensor messages into internal `LidarFrame` and `CameraFrame` dataclasses. This is the preferred long-term direction because it aligns with broader ROS 2 tooling such as TF, launch files, RViz, bag replay, Nav2, and SLAM.
 
-## Connecting Cameras
+At the current stage, ROS 2 ingestion should be viewed as a **code-level integration point**, not yet the full end-user workflow. The repository still needs dedicated bringup launch files, replay workflows, TF validation, and RViz defaults.
 
-Camera ingestion follows the same dual-mode pattern.
+### Direct SDK ingestion
 
-**ROS2 Mode** subscribes to `/camera/image_raw` (or any topic publishing `sensor_msgs/Image`).
+Direct SDK ingestion is available for selected sensors, including Ouster and common camera pathways. This mode is helpful when you need to validate device connectivity or run lightweight experiments without a full ROS 2 environment.
 
-**Direct SDK Mode** uses OpenCV (`cv2.VideoCapture`) for USB cameras or `pyrealsense2` for Intel RealSense depth cameras.
+It should not yet be treated as the final deployment recommendation for a release-ready autonomy stack.
 
-Both modes produce `CameraFrame` dataclasses containing the timestamp, frame ID, image data, intrinsics, and metadata.
+## LiDAR integration
 
-## Calibration
+LiDAR frames are normalised into an internal structure containing timestamp, frame identifier, XYZ point data, optional intensity values, and metadata.
 
-Before running with real sensors, you need to provide calibration files in the `calibration/` directory.
+| Requirement | Why it matters |
+|---|---|
+| Stable timestamps | Synchronisation quality depends on consistent timing |
+| Correct frame identifiers | Future TF-aware fusion depends on a coherent frame tree |
+| Known sensor pose | Projective fusion requires valid extrinsics |
+| Repeatable recordings | Bag replay and benchmark workflows need reproducible input data |
 
-**camera_intrinsics.yaml** contains the camera's intrinsic matrix (K) and distortion coefficients. Use OpenCV's camera calibration tools or the manufacturer's calibration utility.
+## Camera integration
 
-**extrinsics.yaml** contains the rigid-body transforms between the LiDAR, camera, and robot base frames. These transforms are essential for projecting LiDAR points into the camera image and for fusing sensor data in a common coordinate frame.
+Camera frames are normalised into an internal structure containing timestamp, frame identifier, image payload, intrinsics, and metadata.
 
-## Deployment
+| Requirement | Why it matters |
+|---|---|
+| Intrinsic calibration | Projection into image space is impossible without it |
+| Consistent timestamp source | LiDAR-camera association quality depends on it |
+| Image encoding awareness | Overlay and debug workflows rely on predictable image handling |
+| Frame naming discipline | TF and launch workflows become easier to reason about |
 
-The project includes a `Dockerfile` and `docker-compose.yml` for containerised deployment. The Docker image includes all Python dependencies and runs the control loop as the default entrypoint.
+## Calibration assets
 
-For production deployments, we recommend running the control stack in a Docker container with the `--privileged` flag to access USB devices and network interfaces for direct sensor communication.
+The `calibration/` directory contains example calibration files and conventions. These files are important even before the runtime loader is expanded into a release-grade module.
+
+| File | Purpose |
+|---|---|
+| `camera_intrinsics.yaml` | Stores camera matrix and distortion information |
+| `extrinsics.yaml` | Stores rigid transforms between LiDAR, camera, and robot frames |
+| `calibration/README.md` | Describes expected fields and collection guidance |
+
+At the current stage, these files are best treated as **templates and integration references**. The next release stage will add stronger runtime loading, validation, and visual verification tooling.
+
+## Configuration
+
+Runtime configuration is currently environment-driven through `robot_hw/robot_config.py`, with `config/default.yaml` serving as a reference template rather than the sole runtime authority.
+
+Important configuration themes include:
+
+| Theme | Examples |
+|---|---|
+| Control-loop timing | Cycle time and update rate |
+| Power constraints | Battery capacity and thresholds |
+| Sensor enable flags | LiDAR and camera toggles |
+| Communication settings | Telemetry endpoint and reporting interval |
+| Logging settings | Log level and output path |
+
+Future ROS 2-native bringup will extend this configuration surface with launch parameters, calibration file paths, TF settings, and replay or simulation profiles.
+
+## Container deployment
+
+A container build already exists and is suitable for Python-first validation workflows.
 
 ```bash
-docker compose up -d
+docker build -t robot-lidar-fusion .
+docker run --rm robot-lidar-fusion
 ```
 
-For ROS2 deployments, mount the ROS2 workspace into the container and source the setup script before starting the control loop.
+This container path is currently best for development validation, CI, and reproducible package builds. It is not yet a full ROS 2 desktop or simulation image.
 
-## Environment Variables
+## Current integration boundaries
 
-All configuration is loaded from environment variables via `robot_hw/robot_config.py`. See `.env.example` for the full list of available settings. Key variables include `ROBOT_CYCLE_TIME` (control loop period in seconds), `ROBOT_BATTERY_CAPACITY_WH` (battery capacity), and `ROBOT_LIDAR_ENABLED` / `ROBOT_CAMERA_ENABLED` (sensor enable flags).
+The following statements are important to keep integrations realistic.
+
+| Topic | Current boundary |
+|---|---|
+| Production-grade time synchronisation | Not yet complete |
+| TF-aware projective fusion | Not yet complete |
+| Launch and RViz-first onboarding | Not yet complete |
+| Occupancy mapping and costmaps | Not yet complete |
+| Nav2 execution pipeline | Not yet complete |
+| Gazebo and Isaac Sim parity | Not yet complete |
+
+## Recommended integrator workflow
+
+If you are evaluating the repository for a real robot project, the safest order is shown below.
+
+| Order | Action |
+|---|---|
+| 1 | Install the package and run the tests |
+| 2 | Run the mock-hardware orchestrator |
+| 3 | Validate your hardware backend independently |
+| 4 | Feed LiDAR and camera streams into the internal frame contracts |
+| 5 | Prepare calibration assets and verify timestamps |
+| 6 | Wait for the bag replay + RViz workflow before evaluating user-facing ROS 2 demos |
+| 7 | Adopt mapping, costmaps, and Nav2 only when those modules are demonstrably shipped |
+
+## Related documents
+
+| Document | Use it for |
+|---|---|
+| [`README.md`](../README.md) | Project scope and current status |
+| [`support_matrix.md`](support_matrix.md) | Honest support boundary |
+| [`quickstart.md`](quickstart.md) | Cold-start validation |
+| [`architecture.md`](architecture.md) | Internal package structure |
+| [`roadmap.md`](roadmap.md) | Planned release stages |
+
+The guiding principle for every integration remains the same: **prefer demonstrable, tested workflows over aspirational claims**.

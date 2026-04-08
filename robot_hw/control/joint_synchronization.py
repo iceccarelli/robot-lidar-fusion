@@ -44,6 +44,7 @@ class JointCommand:
     torque : float | None
         Target torque/force to apply.
     """
+
     position: float | None = None
     velocity: float | None = None
     torque: float | None = None
@@ -80,11 +81,13 @@ class JointSynchronizer:
         provided.  Defaults to 0.01 s (100 Hz).
     """
 
-    def __init__(self,
-                 hardware_synchronizer: HardwareSynchronizer,
-                 max_velocity: float = 1.0,
-                 max_torque: float = 1.0,
-                 cycle_time: float = 0.01) -> None:
+    def __init__(
+        self,
+        hardware_synchronizer: HardwareSynchronizer,
+        max_velocity: float = 1.0,
+        max_torque: float = 1.0,
+        cycle_time: float = 0.01,
+    ) -> None:
         self._hardware = hardware_synchronizer
         self.max_velocity = float(max_velocity)
         self.max_torque = float(max_torque)
@@ -94,9 +97,9 @@ class JointSynchronizer:
         """Clamp ``value`` to the range [−limit, +limit]."""
         return max(min(value, limit), -limit)
 
-    def synchronize(self,
-                   desired: dict[str, JointCommand],
-                   current: dict[str, Any]) -> dict[str, Any]:
+    def synchronize(
+        self, desired: dict[str, JointCommand], current: dict[str, Any]
+    ) -> dict[str, Any]:
         """Compute synchronised actuator commands and apply them.
 
         For each joint, the method constructs an :class:`ActuatorCommand`
@@ -144,10 +147,9 @@ class JointSynchronizer:
             # Clamp torque if provided
             if torque_cmd is not None:
                 torque_cmd = float(self._clamp(float(torque_cmd), self.max_torque))
-            commands[joint_id] = ActuatorCommand(id=joint_id,
-                                                 position=pos_cmd,
-                                                 velocity=vel_cmd,
-                                                 torque=torque_cmd)
+            commands[joint_id] = ActuatorCommand(
+                id=joint_id, position=pos_cmd, velocity=vel_cmd, torque=torque_cmd
+            )
         # Send commands and receive new sensor data
         new_state = self._hardware.sync(commands)
 
@@ -187,8 +189,7 @@ class JointSynchronizer:
             # approaching trains/cars/humans
             self.detect_environment_hazards(state_for_check)
         except Exception:
-            # Never let safety functions raise; ignore unexpected errors
-            pass
+            return state_for_check
         # Return the clean joint state; hazard keys are not propagated
         return new_state
 
@@ -211,10 +212,12 @@ class JointSynchronizer:
         for jid, tor in torques.items():
             try:
                 tor_val = float(tor)
-            except Exception:
+            except (TypeError, ValueError):
                 continue
             if abs(tor_val) > self.max_torque:
-                print(f"[TorqueWarn] Joint {jid} torque {tor_val:.2f} exceeds limit {self.max_torque:.2f}")
+                print(
+                    f"[TorqueWarn] Joint {jid} torque {tor_val:.2f} exceeds limit {self.max_torque:.2f}"
+                )
 
     def adjust_for_uneven_ground(self, state: dict[str, Any]) -> None:
         """Placeholder to adjust commands when uneven ground is detected.
@@ -284,6 +287,8 @@ class JointSynchronizer:
             else:
                 try:
                     dist = float(info)
-                except Exception:
+                except (TypeError, ValueError):
                     continue
-                print(f"[Hazard] {name.replace('_', ' ').title()} within {dist:.2f} m – take caution")
+                print(
+                    f"[Hazard] {name.replace('_', ' ').title()} within {dist:.2f} m – take caution"
+                )

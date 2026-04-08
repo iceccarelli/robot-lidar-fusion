@@ -1,0 +1,23 @@
+navigation:
+  planner: A_STAR
+  goal_tolerance_m: 0.15
+  replan_on_map_change: true
+  max_linear_speed_mps: 0.5
+  max_angular_speed_rps: 1.0
+  global_plan_horizon_m: 8.0
+  local_plan_horizon_m: 2.0
+
+mapping:
+  grid:
+    width: 80
+    height: 80
+    resolution_m: 0.1
+    origin_xy: [-4.0, -4.0]
+  occupancy_threshold: 100
+  inflation_radius_m: 0.4
+  publish_nav2_payload: true
+
+execution:
+  publish_local_plan: true
+  publish_global_plan: true
+  follow_navigation_velocity_task: true

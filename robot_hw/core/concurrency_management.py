@@ -176,7 +176,7 @@ class ConcurrencyManager:
         ceiling : int
             The priority ceiling value (higher means more critical).
         """
-        if not hasattr(self, '_priority_ceilings'):
+        if not hasattr(self, "_priority_ceilings"):
             self._priority_ceilings: dict[str, int] = {}
         self._priority_ceilings[name] = int(ceiling)
 
@@ -195,4 +195,4 @@ class ConcurrencyManager:
         int | None
             The priority ceiling value or None.
         """
-        return getattr(self, '_priority_ceilings', {}).get(name)
+        return getattr(self, "_priority_ceilings", {}).get(name)

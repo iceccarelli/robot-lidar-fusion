@@ -1,67 +1,129 @@
-# Architecture Guide
+# Architecture
 
-This document describes the internal architecture of the Robot LiDAR Fusion control stack. It is intended for contributors and integrators who need to understand how the subsystems fit together and how data flows through the system during each control cycle.
+This document describes the **current architecture** of `robot-lidar-fusion` and highlights the boundaries where the next release stages will replace placeholder implementations with release-grade robotics workflows.
 
-## Design Principles
+The repository should currently be understood as a **layered Python robotics foundation** composed of deterministic orchestration, typed perception contracts, safety and power managers, planning placeholders, and integration hooks for ROS 2 and direct sensor ingestion.
 
-The architecture follows three guiding principles. First, **determinism**: the control loop runs at a fixed frequency and every subsystem completes its work within a single cycle. Second, **hardware agnosticism**: no module depends on a specific robot platform; all hardware interaction goes through abstract interfaces. Third, **modularity**: each package (core, control, perception, planning, power, ai) can be developed, tested, and replaced independently.
+## Architectural intent
 
-## Package Overview
+The platform is being shaped around four system-level goals.
 
-| Package | Responsibility |
-|:---|:---|
-| `core` | Foundational services: memory, concurrency, communication, hazard detection, fault detection, hardware sync, environment adaptation, consistency verification, execution stack |
-| `control` | Actuator control: joint synchronisation with limits, locomotion with gait generation |
-| `perception` | Sensor ingestion and fusion: LiDAR point clouds, camera frames, time synchronisation, obstacle distance computation |
-| `planning` | High-level decision making: mission planning, navigation, task-to-hardware mapping |
-| `power` | Power management: battery SOC tracking, thermal monitoring with hysteresis cooling |
-| `ai` | AI and prediction: predictive state estimation for orientation forecasting |
+| Goal | Architectural implication |
+|---|---|
+| Determinism | The main loop should execute in a predictable order and surface failures clearly |
+| Replaceable integration points | Sensor, hardware, and planner implementations should be swappable without rewriting the whole stack |
+| Measurable autonomy workflows | Perception and navigation outputs should be testable and benchmarkable |
+| ROS 2-native evolution | The repository should align with TF, launch, bag replay, Nav2, and SLAM conventions as it matures |
 
-## Control Loop
+## Current package layout
 
-The `RobotOrchestrator` runs a deterministic loop at the configured frequency (default 100 Hz). Each cycle executes the following stages in order.
+The Python package is organised into the following top-level areas.
 
-**Stage 1 — Sensor Read.** The hardware synchroniser reads joint positions, velocities, and torques from the hardware backend. The perception pipeline ingests LiDAR and camera frames and synchronises them by timestamp.
+| Package | Current responsibility | Maturity |
+|---|---|---|
+| `robot_hw.core` | Execution control, memory, concurrency, communication, hazard and fault handling, environment adaptation | Prototype to early usable |
+| `robot_hw.control` | Joint synchronisation and locomotion helpers | Prototype |
+| `robot_hw.perception` | Frame models, time sync, sensor ingestion, and early fusion logic | Prototype with clear extension points |
+| `robot_hw.planning` | Mission and navigation placeholders | Placeholder |
+| `robot_hw.power` | Battery and thermal state handling | Early usable |
+| `robot_hw.ai` | Predictive estimation hooks | Experimental |
 
-**Stage 2 — Manager Update.** The hazard manager aggregates safety signals. The battery manager updates state-of-charge. The thermal manager checks per-joint temperatures. The fault detector scans for anomalies.
+## Runtime flow today
 
-**Stage 3 — Task Processing.** The execution stack processes scheduled tasks. The mission planner selects the next goal. The navigation manager computes a path.
+The current control loop is orchestrated by `RobotOrchestrator`. Its high-level runtime order is shown below.
 
-**Stage 4 — Hardware Mapping.** The task-to-hardware mapper translates high-level goals into joint-level instructions through inverse kinematics.
-
-**Stage 5 — Joint Synchronisation.** The joint synchroniser dispatches commands to all joints, enforcing position, velocity, and torque limits.
-
-**Stage 6 — Consistency Verification.** The consistency verifier checks that commanded positions match actual positions within tolerance.
-
-**Stage 7 — Telemetry.** The communication interface sends telemetry data to external systems.
-
-## Data Flow
-
-```
-Sensors → HardwareSynchronizer → SensorProcessor → HazardManager
-                                                  → FaultDetector
-                                                  → BatteryManager
-                                                  → ThermalManager
-
-MissionPlanner → NavigationManager → TaskHardwareMapper → JointSynchronizer → Hardware
-
-ExecutionStack → (scheduled tasks injected into the loop)
-
-CommunicationInterface ← (telemetry from all managers)
+```text
+Hardware / mock state read
+    ↓
+Sensor ingestion and early fusion
+    ↓
+Hazard, battery, thermal, and fault updates
+    ↓
+Mission planning and placeholder navigation
+    ↓
+Task-to-hardware mapping
+    ↓
+Joint command synchronisation
+    ↓
+Consistency verification and telemetry
 ```
 
-## Hardware Abstraction
+This ordering is useful because it already provides a place for future mapping, costmaps, replanning, and structured telemetry. However, several steps still rely on simplified logic.
 
-The `HardwareSynchronizer` in `core/hardware_synchronization.py` provides the abstraction layer between the control stack and the physical robot. It exposes `read_state()` and `write_commands()` methods. The default implementation uses a `MockHardware` backend that simulates joint positions and sensor readings. To connect a real robot, implement the hardware interface and pass it to the orchestrator.
+## Current perception architecture
 
-## Perception Pipeline
+The perception subsystem already contains the most important contracts needed for deeper work.
 
-The perception subsystem supports two ingestion modes. **ROS2 mode** subscribes to standard sensor topics (`/ouster/points`, `/camera/image_raw`) using `rclpy`. **Direct SDK mode** uses the Ouster Python SDK and OpenCV or pyrealsense2 to read sensors without ROS2. Both modes produce `LidarFrame` and `CameraFrame` dataclasses that the `TimeSync` module aligns by timestamp.
+| Component | Current role | Limitation |
+|---|---|---|
+| `sensor_frames.py` | Defines `LidarFrame` and `CameraFrame` dataclasses | Does not enforce calibration or TF validity on its own |
+| `time_sync.py` | Performs nearest-neighbour LiDAR-camera timestamp matching | No advanced sync policy evaluation yet |
+| `sensor_io_ros2.py` | Converts ROS 2 messages into internal frame models | Does not yet provide the full launch, TF, and replay workflow |
+| `sensor_io_direct.py` | Reads selected sensors directly via SDKs | Best viewed as an integration entry point, not a complete deployment path |
+| `sensor_processing.py` | Produces a fused state dictionary | Current fusion is summary-oriented and not yet calibration-aware |
 
-## Safety Architecture
+The next architecture milestone is to turn this subsystem into a geometry-aware fusion pipeline with calibration loading, TF-aware transforms, projective association, object-level fusion, and evaluation metrics.
 
-Safety is enforced at multiple levels. The `HazardManager` aggregates signals from proximity sensors, voltage monitors, gas detectors, pedestrian detectors, and environmental sensors. The `FaultDetector` monitors joint state for position, velocity, and timestamp anomalies. The `JointSynchronizer` enforces per-joint limits on position, velocity, and torque. The orchestrator can trigger an emergency stop when any safety threshold is breached.
+## Current planning architecture
 
-## Extending the Stack
+Planning is the part of the repository that most clearly remains a scaffold.
 
-To add a new subsystem, create a new package under `robot_hw/`, implement the module with a clear public API, and wire it into the orchestrator's control loop. Add tests in `tests/` and update the architecture documentation. See the [Integration Guide](integration_guide.md) for step-by-step instructions.
+| Component | Current role | Limitation |
+|---|---|---|
+| `mission_planner.py` | Queues and emits simple goals | No rich execution semantics or reporting |
+| `navigation_manager.py` | Generates toy waypoint paths | No occupancy map, costmap, or real planner interface |
+| `task_hardware_mapping.py` | Converts high-level targets into joint instructions | Not yet integrated with Nav2-style planning outputs |
+
+This package boundary will likely be refactored into a more explicit navigation layer with planner interfaces, replanning hooks, costmap inputs, and Nav2 interoperability.
+
+## Current safety and operability architecture
+
+The project already includes foundational subsystems that will remain important as the stack becomes more capable.
+
+| Component | Current role |
+|---|---|
+| `HazardManager` | Aggregates safety-relevant signals such as proximity and environmental risks |
+| `FaultDetector` | Watches joint and timestamp anomalies |
+| `BatteryManager` | Tracks state-of-charge and energy constraints |
+| `ThermalManager` | Monitors per-joint thermal behaviour |
+| `CommunicationInterface` | Provides an integration point for telemetry and external messaging |
+
+These modules are valuable because they establish the operational skeleton into which structured logs, health events, and runtime metrics can later be inserted.
+
+## Integration boundaries
+
+The following interfaces are already important extension points.
+
+| Boundary | Purpose |
+|---|---|
+| Hardware backend contract | Allows replacement of mock hardware with robot-specific SDK integration |
+| Perception frame contracts | Keeps ingestion separate from fusion and evaluation |
+| Task mapping boundary | Isolates motion command generation from planning logic |
+| Configuration loader | Centralises environment-driven runtime settings |
+
+## What will change next
+
+Several architectural changes are planned and should be expected by contributors.
+
+| Planned addition | Why it belongs |
+|---|---|
+| `launch/` and `rviz/` assets | Needed for ROS 2-native reproducible demos |
+| Calibration loader and projective fusion modules | Needed to replace summary-style fusion |
+| Occupancy and costmap builders | Needed to turn perception into planning inputs |
+| Navigation package or bridge layer | Needed to support replanning and Nav2 compatibility |
+| Simulation adapters and benchmarks | Needed to make trust measurable across scenarios |
+| Structured telemetry and health event schema | Needed for runtime observability |
+
+## Architectural reading guidance
+
+Contributors should read the repository in the following order.
+
+| Document | Purpose |
+|---|---|
+| [`README.md`](../README.md) | Public scope and current support boundary |
+| [`support_matrix.md`](support_matrix.md) | Honest capability status |
+| [`quickstart.md`](quickstart.md) | What can be run today |
+| [`integration_guide.md`](integration_guide.md) | How hardware and sensors connect |
+| [`roadmap.md`](roadmap.md) | Which placeholders will be replaced next |
+
+This document should evolve conservatively. It should describe the system as it exists, not as we hope it will be after future stages are implemented.

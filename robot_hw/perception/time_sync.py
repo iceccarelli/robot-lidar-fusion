@@ -91,7 +91,7 @@ class TimeSync:
         if not self.buffer:
             return SyncResult(lidar_frame=lidar_frame, camera_frame=None, offset=None)
         best: CameraFrame | None = None
-        best_dt: float = float('inf')
+        best_dt: float = float("inf")
         ts = lidar_frame.timestamp
         for cf in self.buffer:
             dt = abs(cf.timestamp - ts)

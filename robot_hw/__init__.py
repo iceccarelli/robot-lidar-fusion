@@ -1,27 +1,10 @@
-"""Robot Hardware Control Stack with LiDAR-Camera Fusion.
+"""Core Python package for robot-lidar-fusion.
 
-This package provides a modular, hardware-agnostic control stack for
-humanoid and mobile robots.  It integrates LiDAR point-cloud processing,
-camera frame ingestion, sensor fusion, hazard detection, locomotion
-control, mission planning and power management into a single
-deterministic control loop.
-
-Subpackages
------------
-core
-    Foundational services: hardware synchronisation, memory management,
-    fault detection, hazard monitoring, concurrency and communication.
-control
-    Joint synchronisation and locomotion controllers.
-perception
-    Sensor I/O (ROS2 and direct SDK), LiDAR utilities, time
-    synchronisation and sensor fusion.
-planning
-    Mission planning, navigation and task-to-hardware mapping.
-power
-    Battery state-of-charge tracking and thermal management.
-ai
-    Predictive state estimation and trajectory forecasting.
+The package currently provides a deterministic robotics foundation with
+mock-hardware orchestration, perception data contracts, early sensor
+ingestion helpers, safety and power-management modules, and placeholder
+planning components that are being upgraded toward a ROS 2-native
+release-ready autonomy workflow.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -68,9 +68,13 @@ def test_fuse_sensors_includes_lidar_and_camera() -> None:
     # Construct synthetic LiDAR frame with two points at distances 2.0 and 0.5 m
     pts = [(2.0, 0.0, 0.0), (0.5, 0.0, 0.0)]
     intensities = [10.0, 20.0]
-    lf = LidarFrame(timestamp=1.0, frame_id="os", points_xyz=pts, intensities=intensities, metadata={})
+    lf = LidarFrame(
+        timestamp=1.0, frame_id="os", points_xyz=pts, intensities=intensities, metadata={}
+    )
     # Camera frame with dummy image bytes
-    cf = CameraFrame(timestamp=1.0, frame_id="cam", image=b"\x01\x02", intrinsics={"fx": 1.0}, metadata={})
+    cf = CameraFrame(
+        timestamp=1.0, frame_id="cam", image=b"\x01\x02", intrinsics={"fx": 1.0}, metadata={}
+    )
     # Raw data used by SensorProcessor; include a timestamp and velocities for acceleration
     raw_data = {
         "timestamp": 1.0,
