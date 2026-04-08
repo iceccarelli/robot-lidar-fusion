@@ -170,7 +170,10 @@ class _SensorIONode(Node):
         super().__init__(node_name)
         self._parent = parent
         # Subscriptions: use QoS profile optimised for sensor data
-        from rclpy.qos import qos_profile_sensor_data
+        try:
+            from rclpy.qos import qos_profile_sensor_data
+        except ImportError:
+            qos_profile_sensor_data = None
 
         qos = qos_profile_sensor_data
         qos.depth = qos_depth
