@@ -214,7 +214,7 @@ class SensorProcessor:
                     )
                 except Exception:
                     acc = (0.0, 0.0, 0.0)
-    
+
         calib = self._config.sensor_calibration_factors
         if calib and len(calib) >= 9:
             acc = (
@@ -222,7 +222,7 @@ class SensorProcessor:
                 float(calib[7]) * acc[1],
                 float(calib[8]) * acc[2],
             )
-    
+
         if self._noise_std > 0.0:
             acc = (
                 acc[0] + random.gauss(0.0, self._noise_std),
@@ -230,7 +230,6 @@ class SensorProcessor:
                 acc[2] + random.gauss(0.0, self._noise_std),
             )
         return acc
-
 
     def _summarize_lidar_frame(self, frame: LidarFrame) -> dict[str, Any]:
         return {

@@ -135,7 +135,9 @@ class FaultDetector:
                 if isinstance(actuator_commands, dict):
                     cmd = actuator_commands.get(jid)
                     if hasattr(cmd, "velocity"):
-                        commanded_vel = cmd.velocity if cmd is not None and cmd.velocity is not None else 0.0
+                        commanded_vel = (
+                            cmd.velocity if cmd is not None and cmd.velocity is not None else 0.0
+                        )
                     elif isinstance(cmd, dict):
                         commanded_vel = cmd.get("velocity")
                     try:

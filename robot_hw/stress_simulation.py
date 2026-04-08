@@ -33,9 +33,8 @@ import os
 import random
 import time
 
-from robot_hw.robot_orchestrator import RobotOrchestrator
-
 from robot_hw.robot_config import load as load_config
+from robot_hw.robot_orchestrator import RobotOrchestrator
 
 
 def random_goal(radius: float = 5.0) -> dict[str, float]:
