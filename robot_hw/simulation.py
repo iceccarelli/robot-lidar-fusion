@@ -280,8 +280,8 @@ def random_task_submitter(
             # Occasionally send velocity or torque commands
             if random.random() < 0.3:
                 velocities[jid] = random.uniform(-2.0, 2.0)
-            if random.random() < 0.2:
-                torques[jid] = random.uniform(-1.0, 1.0)
+            if random.random() < 0.2:  # nosec B311
+                torques[jid] = random.uniform(-1.0, 1.0)  # nosec B311
         # Build a parameter dict that includes only present fields
         params: dict[str, Any] = {"joint_positions": targets}
         if velocities:
