@@ -123,19 +123,19 @@ class TaskHardwareMapper:
         """
         if not isinstance(task.parameters, dict):
             raise ValueError("Task parameters must be a dictionary")
-        # Case 1: direct joint specification
         if "joint_positions" in task.parameters:
             jp = task.parameters["joint_positions"]
             if not isinstance(jp, dict):
                 raise ValueError("'joint_positions' must be a dict")
             joint_instructions: list[JointInstruction] = []
-            for jid in joint_ids:
-                instructions.append(JointInstruction(joint_id=jid, command={"velocity": vx}))
-            return instructions
-        # Case 1b: direct velocity specification (locomotion)
+            for joint_id, pos in jp.items():
+                joint_instructions.append(
+                    JointInstruction(joint_id=joint_id, command={"position": pos})
+                )
+            return joint_instructions
+
         if "target_velocity" in task.parameters:
             tv = task.parameters["target_velocity"]
-            # Accept scalar or tuple/list; use first component as forward velocity
             vx: float
             if isinstance(tv, (list, tuple)) and tv:
                 try:
@@ -150,16 +150,18 @@ class TaskHardwareMapper:
                         vx = 0.0
                 else:
                     vx = 0.0
-            # Determine joint IDs from current_state positions; fallback to empty
+
             joint_ids = []
             if current_state and isinstance(current_state.get("positions"), dict):
                 joint_ids = list(current_state["positions"].keys())
+
             joint_instructions: list[JointInstruction] = []
             for jid in joint_ids:
                 joint_instructions.append(
                     JointInstruction(joint_id=jid, command={"velocity": vx})
                 )
             return joint_instructions
+
         # Case 2: use inverse kinematics
         target = task.parameters
         joint_targets = self._kinematics.inverse_kinematics(target, current_state)
