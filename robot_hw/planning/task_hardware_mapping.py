@@ -127,40 +127,40 @@ class TaskHardwareMapper:
             jp = task.parameters["joint_positions"]
             if not isinstance(jp, dict):
                 raise ValueError("'joint_positions' must be a dict")
-            joint_instructions: list[JointInstruction] = []
+            position_instructions: list[JointInstruction] = []
             for joint_id, pos in jp.items():
-                joint_instructions.append(
+                position_instructions.append(
                     JointInstruction(joint_id=joint_id, command={"position": pos})
                 )
-            return joint_instructions
-
+            return position_instructions
+        
         if "target_velocity" in task.parameters:
             tv = task.parameters["target_velocity"]
             vx: float
             if isinstance(tv, (list, tuple)) and tv:
                 try:
                     vx = float(tv[0])
-                except Exception:
+                except (TypeError, ValueError):
+                    vx = 0.0
+            elif isinstance(tv, (int, float, str)):
+                try:
+                    vx = float(tv)
+                except (TypeError, ValueError):
                     vx = 0.0
             else:
-                if isinstance(tv, (int, float, str)):
-                    try:
-                        vx = float(tv)
-                    except Exception:
-                        vx = 0.0
-                else:
-                    vx = 0.0
-
-            joint_ids = []
+                vx = 0.0
+        
+            joint_ids: list[str] = []
             if current_state and isinstance(current_state.get("positions"), dict):
                 joint_ids = list(current_state["positions"].keys())
-
-            joint_instructions: list[JointInstruction] = []
+        
+            velocity_instructions: list[JointInstruction] = []
             for jid in joint_ids:
-                joint_instructions.append(
+                velocity_instructions.append(
                     JointInstruction(joint_id=jid, command={"velocity": vx})
                 )
-            return joint_instructions
+            return velocity_instructions
+
 
         # Case 2: use inverse kinematics
         target = task.parameters
