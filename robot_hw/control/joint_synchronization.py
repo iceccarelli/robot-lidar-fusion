@@ -188,7 +188,7 @@ class JointSynchronizer:
             # Detect environmental hazards such as high voltage cables or
             # approaching trains/cars/humans
             self.detect_environment_hazards(state_for_check)
-        except Exception as exc:
+        except Exception:
             return state_for_check
         # Return the clean joint state; hazard keys are not propagated
         return new_state
