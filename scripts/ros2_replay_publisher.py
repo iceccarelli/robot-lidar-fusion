@@ -159,13 +159,10 @@ class DemoReplayPublisher(Node):
             self._camera_info_pub.publish(build_camera_info(camera_header, camera_payload))
             self._debug_pub.publish(build_debug_markers(lidar_header, lidar_payload))
             self.get_logger().info(
-                "published seq=%s lidar_ts=%.3f camera_ts=%.3f points=%d"
-                % (
-                    item.get("sequence_id"),
-                    float(lidar_payload["timestamp"]),
-                    float(camera_payload["timestamp"]),
-                    len(lidar_payload["points_xyz"]),
-                )
+                f"published seq={item.get('sequence_id')} "
+                f"lidar_ts={lidar_payload.timestamp:.3f} "
+                f"camera_ts={camera_payload.timestamp:.3f} "
+                f"points={len(lidar_payload.points)}"
             )
             rclpy.spin_once(self, timeout_sec=0.0)
             if previous_timestamp is not None:
