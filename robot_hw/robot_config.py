@@ -42,7 +42,10 @@ def _f(name: str, default: float, *, min: float | None = None, max: float | None
     """Parse an environment variable into a float with optional bounds."""
     raw = os.getenv(name)
     try:
-        val = float(raw) if raw not in (None, "") else default
+        if raw in (None, ""):
+            val = default
+        else:
+            val = float(raw)
     except Exception:
         val = default
     if min is not None and val < min:
