@@ -3,25 +3,25 @@
 
 This script exercises the final robot control stack across a range of
 environments by simulating mission goals, random goal injection and
-telemetry generation.  It uses the `RobotOrchestrator` class from the
+telemetry generation. It uses the `RobotOrchestrator` class from the
 main system and relies on its environment adaptation, mission
 planning, communication, battery, thermal and hazard management
-capabilities.  While not a full physics‑based digital twin, the
-simulation demonstrates end‑to‑end interactions between modules and
+capabilities. While not a full physics-based digital twin, the
+simulation demonstrates end-to-end interactions between modules and
 provides a foundation for more sophisticated environment models.
 
 Usage
 -----
 Run ``python stress_simulation.py --profile <ENVIRONMENT> --cycles N``
-to simulate ``N`` cycles in the specified environment profile.  The
+to simulate ``N`` cycles in the specified environment profile. The
 environment profile is one of ``MINING``, ``UNDERWATER``, ``SPACE``,
-``FORESTRY`` or ``GENERAL``.  The simulation will randomly inject
+``FORESTRY`` or ``GENERAL``. The simulation will randomly inject
 additional goals and print a summary of telemetry data at the end.
 
 Limitations
 -----------
 This simplified simulation does not model detailed sensor physics or
-environment‑specific hazards.  For full digital twin fidelity, the
+environment-specific hazards. For full digital twin fidelity, the
 hardware interface should be extended to simulate actuator dynamics,
 sensor noise and environment interactions.
 """
@@ -39,16 +39,18 @@ from robot_hw.robot_orchestrator import RobotOrchestrator
 
 def random_goal(radius: float = 5.0) -> dict[str, float]:
     """Generate a random (x, y) goal within a square of given radius."""
-    return {"x": random.uniform(-radius, radius), "y": random.uniform(-radius, radius)}
+    goal_x = random.uniform(-radius, radius)  # nosec B311
+    goal_y = random.uniform(-radius, radius)  # nosec B311
+    return {"x": goal_x, "y": goal_y}
 
 
 def run_simulation(profile: str, cycles: int = 100) -> None:
     """Run the robot orchestrator in the specified environment profile.
 
     A new orchestrator is created with parameters derived from the
-    loaded configuration.  A random initial goal is added to the
-    mission planner.  At each cycle, additional goals may be queued
-    randomly.  Telemetry logs are collected via the communication
+    loaded configuration. A random initial goal is added to the
+    mission planner. At each cycle, additional goals may be queued
+    randomly. Telemetry logs are collected via the communication
     interface and summarised at the end.
 
     Parameters
@@ -58,9 +60,7 @@ def run_simulation(profile: str, cycles: int = 100) -> None:
     cycles : int
         Number of control cycles to run.
     """
-    # Override environment profile in the environment for this run
     os.environ["ENVIRONMENT_PROFILE"] = profile.upper()
-    # Load configuration and instantiate orchestrator with derived parameters
     config = load_config()
     orch = RobotOrchestrator(
         cycle_time=config.cycle_time_s,
@@ -70,23 +70,17 @@ def run_simulation(profile: str, cycles: int = 100) -> None:
         max_velocity=max(config.max_velocity_per_joint) if config.max_velocity_per_joint else 1.0,
         max_torque=max(config.max_torque_per_joint) if config.max_torque_per_joint else 1.0,
     )
-    # Submit an initial goal
     orch.submit_goal(random_goal())
-    # Run the orchestrator for the desired number of cycles, injecting
-    # random goals to exercise mission planning and task scheduling
     for _cycle in range(cycles):
-        # With a small probability, add another goal
-        if random.random() < 0.2:
+        if random.random() < 0.2:  # nosec B311
             orch.submit_goal(random_goal())
         orch.run(num_cycles=1)
-        # Introduce a small delay between cycles to simulate real time
         time.sleep(config.cycle_time_s)
-    # Summarise telemetry
+
     telem_log = getattr(orch.communication, "_telemetry_log", [])
     print(f"\nSimulation complete for profile {profile}.")
     print(f"Cycles executed: {cycles}")
     print(f"Telemetry messages sent: {len(telem_log)}")
-    # Show last telemetry entry for inspection
     if telem_log:
         print("Last telemetry message:")
         print(telem_log[-1])

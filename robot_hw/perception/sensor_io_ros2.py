@@ -1,13 +1,13 @@
 """ROS2 sensor ingestion for LiDAR and camera.
 
 This module provides an asynchronous bridge between ROS2 topics and the
-robot's internal perception pipeline.  It subscribes to the point
-cloud topic published by an Ouster OS1 LiDAR (via the ``ouster_ros``
+robot's internal perception pipeline. It subscribes to the point cloud
+topic published by an Ouster OS1 LiDAR (via the ``ouster_ros``
 driver) and to the image and camera info topics published by a
 camera driver (e.g. Intel RealSense ``realsense2_camera`` or a
-generic UVC node).  Incoming messages are converted into internal
-``LidarFrame`` and ``CameraFrame`` instances and stored in thread‑safe
-attributes.  A background thread spins the ROS2 node to process
+generic UVC node). Incoming messages are converted into internal
+``LidarFrame`` and ``CameraFrame`` instances and stored in thread-safe
+attributes. A background thread spins the ROS2 node to process
 callbacks without blocking the main control loop.
 
 Example usage::
@@ -24,9 +24,9 @@ Example usage::
     sensor_io.stop()
 
 Note that ROS2 must be installed and the appropriate sensor drivers
-running.  The point cloud conversion uses ``sensor_msgs_py.point_cloud2``
+running. The point cloud conversion uses ``sensor_msgs_py.point_cloud2``
 from the ROS2 Python library; this package should be available in a
-ROS2 environment.  If conversion fails, the raw message is stored in
+ROS2 environment. If conversion fails, the raw message is stored in
 the frame's metadata for downstream processing.
 """
 
@@ -38,17 +38,14 @@ import time
 from typing import TYPE_CHECKING, Any
 
 """
-Attempt to import ROS2 types.  We use a two‑stage import to satisfy static
+Attempt to import ROS2 types. We use a two-stage import to satisfy static
 type checkers (e.g. Pylance) while still working correctly when ROS2 is
-missing at runtime.  When running under a ROS2 environment the imports
-below will succeed; otherwise we fall back to placeholders.  During type
+missing at runtime. When running under a ROS2 environment the imports
+below will succeed; otherwise we fall back to placeholders. During type
 checking, the imports in the TYPE_CHECKING branch inform the checker of
 the expected types.
 """
 
-# During type checking we want to import the real modules to satisfy the
-# type system.  At runtime we wrap the import in a try/except so that
-# environments without ROS2 do not crash.
 if TYPE_CHECKING:
     import numpy as np  # type: ignore
     import rclpy  # type: ignore
@@ -63,9 +60,6 @@ try:
     from sensor_msgs.msg import CameraInfo, Image, PointCloud2  # type: ignore
     from sensor_msgs_py import point_cloud2  # type: ignore
 except Exception:
-    # Define placeholders so that type checkers do not complain when
-    # ROS2 is unavailable in this environment.  These imports will
-    # raise at runtime when used if ROS2 is not installed.
     rclpy = None  # type: ignore
     Node = object  # type: ignore
     PointCloud2 = object  # type: ignore
@@ -74,8 +68,6 @@ except Exception:
     point_cloud2 = None  # type: ignore
     np = None  # type: ignore
 
-# Expose a flag indicating whether ROS2 imports succeeded.  Other modules
-# can check this to determine if ROS2 is available on the system.
 ROS2_AVAILABLE: bool = rclpy is not None
 
 from .sensor_frames import CameraFrame, LidarFrame  # noqa: E402
@@ -100,11 +92,9 @@ class Ros2SensorIO:
         self._camera_info_topic = camera_info_topic
         self._qos_depth = int(qos_depth)
         self._node_name = node_name
-        # Storage for latest frames with thread‑safety
         self._latest_lidar: LidarFrame | None = None
         self._latest_camera: CameraFrame | None = None
         self._camera_intrinsics: dict[str, Any] = {}
-        # Thread and ROS2 node
         self._thread: threading.Thread | None = None
         self._node: Node | None = None
         self._stop_event = threading.Event()
@@ -113,7 +103,6 @@ class Ros2SensorIO:
         """Start the ROS2 node and background spin thread."""
         if self._thread is not None:
             return
-        # Initialise ROS2 and create node
         rclpy.init(args=None)
         self._node = _SensorIONode(
             parent=self,
@@ -144,15 +133,16 @@ class Ros2SensorIO:
         return self._latest_camera
 
     def _spin_thread(self) -> None:
-        assert self._node is not None
-        # Use a single‑threaded executor to spin the node without blocking
+        node = self._node
+        if node is None:
+            return
         executor = rclpy.executors.SingleThreadedExecutor()
-        executor.add_node(self._node)
+        executor.add_node(node)
         while not self._stop_event.is_set():
             executor.spin_once(timeout_sec=0.1)
         executor.shutdown()
         with contextlib.suppress(Exception):
-            self._node.destroy_node()
+            node.destroy_node()
 
 
 class _SensorIONode(Node):
@@ -169,50 +159,70 @@ class _SensorIONode(Node):
     ) -> None:
         super().__init__(node_name)
         self._parent = parent
-        # Use queue depth directly to avoid local ROS QoS imports in typed code
         qos = qos_depth
 
-        # Subscribe to LiDAR point clouds
         self._lidar_sub = self.create_subscription(
             PointCloud2, lidar_topic, self._lidar_callback, qos
         )
-        # Subscribe to camera images
         self._camera_sub = self.create_subscription(Image, camera_topic, self._camera_callback, qos)
-        # Subscribe to camera info for intrinsics
         self._cinfo_sub = self.create_subscription(
             CameraInfo, camera_info_topic, self._camera_info_callback, qos
         )
 
-    def _lidar_callback(self, msg: PointCloud2) -> None:
-        # Extract timestamp; fallback to current time on failure
+    @staticmethod
+    def _extract_timestamp(message: Any) -> float:
         try:
-            ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
+            return float(message.header.stamp.sec) + float(message.header.stamp.nanosec) * 1e-9
         except Exception:
-            ts = time.time()
+            return time.time()
+
+    @staticmethod
+    def _parse_intrinsics(msg: CameraInfo) -> dict[str, Any] | None:
+        try:
+            fx = float(msg.k[0])
+            fy = float(msg.k[4])
+            cx = float(msg.k[2])
+            cy = float(msg.k[5])
+            distortion = [float(x) for x in msg.d]
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return None
+        return {
+            "fx": fx,
+            "fy": fy,
+            "cx": cx,
+            "cy": cy,
+            "D": distortion,
+            "distortion_model": msg.distortion_model,
+        }
+
+    def _lidar_callback(self, msg: PointCloud2) -> None:
+        ts = self._extract_timestamp(msg)
 
         points: list[tuple[float, float, float]] = []
         intensity_values: list[float] = []
         intensities: list[float] | None = None
 
-        # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
-                for p in point_cloud2.read_points(
-                    msg, field_names=("x", "y", "z", "intensity"), skip_nans=True
+                for point in point_cloud2.read_points(
+                    msg,
+                    field_names=("x", "y", "z", "intensity"),
+                    skip_nans=True,
                 ):
-                    x, y, z, i = p
+                    x, y, z, intensity = point
                     points.append((float(x), float(y), float(z)))
-                    intensity_values.append(float(i))
+                    intensity_values.append(float(intensity))
                 intensities = intensity_values if intensity_values else None
             except Exception:
                 try:
-                    for p in point_cloud2.read_points(
-                        msg, field_names=("x", "y", "z"), skip_nans=True
+                    for point in point_cloud2.read_points(
+                        msg,
+                        field_names=("x", "y", "z"),
+                        skip_nans=True,
                     ):
-                        x, y, z = p
+                        x, y, z = point
                         points.append((float(x), float(y), float(z)))
                 except Exception:
-                    # If conversion fails, leave points empty and store raw message
                     points = []
                 intensities = None
         else:
@@ -222,42 +232,22 @@ class _SensorIONode(Node):
         meta: dict[str, Any] = {}
         if not points:
             meta["raw_msg"] = msg
-        lf = LidarFrame(
+        self._parent._latest_lidar = LidarFrame(
             timestamp=ts,
             frame_id=frame_id,
             points_xyz=points,
             intensities=intensities,
             metadata=meta,
         )
-        self._parent._latest_lidar = lf
 
     def _camera_info_callback(self, msg: CameraInfo) -> None:
-        # Extract intrinsics from camera info
-        try:
-            fx = float(msg.k[0])
-            fy = float(msg.k[4])
-            cx = float(msg.k[2])
-            cy = float(msg.k[5])
-            d = [float(x) for x in msg.d]
-            intrinsics = {
-                "fx": fx,
-                "fy": fy,
-                "cx": cx,
-                "cy": cy,
-                "D": d,
-                "distortion_model": msg.distortion_model,
-            }
-            self._parent._camera_intrinsics = intrinsics
-        except Exception:
-            pass
+        intrinsics = self._parse_intrinsics(msg)
+        if intrinsics is None:
+            return
+        self._parent._camera_intrinsics = intrinsics
 
     def _camera_callback(self, msg: Image) -> None:
-        # Extract timestamp; fallback to current time
-        try:
-            ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
-        except Exception:
-            ts = time.time()
-        # Convert raw bytes to numpy array if available
+        ts = self._extract_timestamp(msg)
         try:
             if np is None:
                 raise ImportError("NumPy unavailable")
@@ -271,7 +261,10 @@ class _SensorIONode(Node):
             dict(self._parent._camera_intrinsics) if self._parent._camera_intrinsics else {}
         )
         frame_id = getattr(msg.header, "frame_id", "camera") or "camera"
-        cf = CameraFrame(
-            timestamp=ts, frame_id=frame_id, image=frame, intrinsics=intrinsics, metadata={}
+        self._parent._latest_camera = CameraFrame(
+            timestamp=ts,
+            frame_id=frame_id,
+            image=frame,
+            intrinsics=intrinsics,
+            metadata={},
         )
-        self._parent._latest_camera = cf

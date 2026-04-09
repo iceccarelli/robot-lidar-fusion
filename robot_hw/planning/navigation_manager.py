@@ -42,6 +42,29 @@ class NavigationManager:
         self._latest_velocity_command: tuple[float, float, float] = (0.0, 0.0, 0.0)
         self._last_plan_signature: tuple[Any, ...] | None = None
 
+    @staticmethod
+    def _coerce_xy_pair(value: Any) -> tuple[float, float] | None:
+        if not isinstance(value, (list, tuple)) or len(value) < 2:
+            return None
+        try:
+            x = float(value[0])
+            y = float(value[1])
+        except (TypeError, ValueError):
+            return None
+        return (x, y)
+
+    @staticmethod
+    def _coerce_positions_dict(value: Any) -> tuple[float, float] | None:
+        if not isinstance(value, dict) or not value:
+            return None
+        values = list(value.values())
+        try:
+            x = float(values[0]) if len(values) >= 1 else 0.0
+            y = float(values[1]) if len(values) >= 2 else 0.0
+        except (TypeError, ValueError):
+            return None
+        return (x, y)
+
     def set_goal(self, goal: tuple[float, float]) -> None:
         self._goal = (float(goal[0]), float(goal[1]))
         self._current_plan.clear()
@@ -111,22 +134,14 @@ class NavigationManager:
         return dict(self._latest_report)
 
     def _extract_current_position(self, state: Any) -> tuple[float, float]:
-        if isinstance(state, dict):
-            position = state.get("position")
-            if isinstance(position, (list, tuple)) and len(position) >= 2:
-                try:
-                    return (float(position[0]), float(position[1]))
-                except Exception:
-                    pass
-            positions = state.get("positions", {})
-            if isinstance(positions, dict) and positions:
-                values = list(positions.values())
-                try:
-                    x = float(values[0]) if len(values) >= 1 else 0.0
-                    y = float(values[1]) if len(values) >= 2 else 0.0
-                    return (x, y)
-                except Exception:
-                    return (0.0, 0.0)
+        if not isinstance(state, dict):
+            return (0.0, 0.0)
+        position = self._coerce_xy_pair(state.get("position"))
+        if position is not None:
+            return position
+        positions = self._coerce_positions_dict(state.get("positions", {}))
+        if positions is not None:
+            return positions
         return (0.0, 0.0)
 
     def _build_plan_signature(
@@ -136,7 +151,7 @@ class NavigationManager:
         goal: tuple[float, float],
         map_summary: dict[str, Any],
     ) -> tuple[Any, ...]:
-        hazard_flags = {}
+        hazard_flags: dict[str, Any] = {}
         if isinstance(state, dict) and isinstance(state.get("hazard_flags"), dict):
             hazard_flags = state["hazard_flags"]
         risk_markers = tuple(sorted(str(key) for key in hazard_flags))

@@ -79,7 +79,8 @@ class OccupancyMapper:
                     if not occupancy_grid.in_bounds(gx, gy):
                         continue
                     distance = hypot(
-                        dx * occupancy_grid.resolution_m, dy * occupancy_grid.resolution_m
+                        dx * occupancy_grid.resolution_m,
+                        dy * occupancy_grid.resolution_m,
                     )
                     if distance > self._inflation_radius_m:
                         continue
@@ -136,6 +137,28 @@ class OccupancyMapper:
             data=[[default_value for _ in range(self._width)] for _ in range(self._height)],
         )
 
+    @staticmethod
+    def _camera_point_from_centroid(centroid: Any) -> tuple[float, float] | None:
+        if not isinstance(centroid, (list, tuple)) or len(centroid) < 3:
+            return None
+        try:
+            x_cam = float(centroid[2])
+            y_cam = -float(centroid[0])
+        except (TypeError, ValueError):
+            return None
+        return (x_cam, y_cam)
+
+    @staticmethod
+    def _lidar_point_from_sample(point: Any) -> tuple[float, float] | None:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return None
+        try:
+            x_point = float(point[0])
+            y_point = float(point[1])
+        except (TypeError, ValueError):
+            return None
+        return (x_point, y_point)
+
     def _iter_obstacle_points(self, state: dict[str, Any]) -> list[tuple[float, float]]:
         points: list[tuple[float, float]] = []
         fusion = state.get("fusion") if isinstance(state, dict) else None
@@ -146,13 +169,9 @@ class OccupancyMapper:
                     if not isinstance(obj, dict):
                         continue
                     centroid = obj.get("centroid_camera_xyz")
-                    if isinstance(centroid, (list, tuple)) and len(centroid) >= 3:
-                        try:
-                            x_cam = float(centroid[2])
-                            y_cam = -float(centroid[0])
-                            points.append((x_cam, y_cam))
-                        except Exception:
-                            continue
+                    parsed_point = self._camera_point_from_centroid(centroid)
+                    if parsed_point is not None:
+                        points.append(parsed_point)
         if points:
             return points
 
@@ -161,11 +180,9 @@ class OccupancyMapper:
             cloud = getattr(lidar, "points_xyz", None)
             if isinstance(cloud, list):
                 for point in cloud:
-                    if isinstance(point, (list, tuple)) and len(point) >= 2:
-                        try:
-                            points.append((float(point[0]), float(point[1])))
-                        except Exception:
-                            continue
+                    parsed_point = self._lidar_point_from_sample(point)
+                    if parsed_point is not None:
+                        points.append(parsed_point)
         return points
 
     def _inflation_cost(self, distance_m: float) -> int:
