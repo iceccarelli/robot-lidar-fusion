@@ -325,10 +325,7 @@ class _SensorIONode(Node):
         points: list[tuple[float, float, float]] = []
         intensities: list[float] = []
         field_names: tuple[str, ...]
-        if include_intensity:
-            field_names = ("x", "y", "z", "intensity")
-        else:
-            field_names = ("x", "y", "z")
+        field_names = ("x", "y", "z", "intensity") if include_intensity else ("x", "y", "z")
 
         for point in point_cloud2.read_points(  # type: ignore[union-attr]
             msg,

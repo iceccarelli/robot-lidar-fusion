@@ -50,7 +50,6 @@ from robot_hw.telemetry.runtime_metrics import (
     build_structured_log,
 )
 
-
 _PRESERVED_STATE_KEYS: Final[tuple[str, ...]] = (
     "fusion",
     "hazards",
@@ -469,8 +468,7 @@ class RobotOrchestrator:
         self.battery_manager.update(battery_state)
 
         temps = {
-            joint_id: 30.0 + 0.1 * cycle
-            for joint_id in self.current_state.get("positions", {})
+            joint_id: 30.0 + 0.1 * cycle for joint_id in self.current_state.get("positions", {})
         }
         self.thermal_manager.update(temps)
 
@@ -689,7 +687,9 @@ class RobotOrchestrator:
                 print(f"[Cycle {cycle}] Warning: battery low or temperature out of range")
             if not self.thermal_manager.is_within_limits():
                 print(f"[Cycle {cycle}] Warning: thermal limit exceeded; cooling recommended")
-                print(f"[Cycle {cycle}] Cooling duties: {self.thermal_manager.recommended_cooling()}")
+                print(
+                    f"[Cycle {cycle}] Cooling duties: {self.thermal_manager.recommended_cooling()}"
+                )
 
             self._publish_runtime_outputs(cycle, start, consistent, faults, hazards)
 

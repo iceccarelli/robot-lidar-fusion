@@ -16,7 +16,8 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
-from robot_hw.robot_config import RobotConfig, load as load_config
+from robot_hw.robot_config import RobotConfig
+from robot_hw.robot_config import load as load_config
 from robot_hw.robot_orchestrator import RobotOrchestrator
 
 
@@ -109,4 +110,3 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

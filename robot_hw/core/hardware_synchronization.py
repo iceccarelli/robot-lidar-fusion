@@ -167,12 +167,18 @@ class HardwareSynchronizer:
                 snapshot["gas"] = random.uniform(0.0, 3.0)  # nosec B311
                 snapshot["radiation"] = random.uniform(0.0, 2.0)  # nosec B311
                 snapshot["high_voltage"] = random.uniform(0.0, 10.0)  # nosec B311
-                snapshot["train"] = random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0  # nosec B311
+                snapshot["train"] = (
+                    random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
+                )  # nosec B311
                 snapshot["pedestrian"] = bool(random.random() < 0.05)  # nosec B311
             elif env == "UNDERWATER":
                 snapshot["proximity"] = random.uniform(0.0, 2.0)  # nosec B311
-                snapshot["gas"] = random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0  # nosec B311
-                snapshot["radiation"] = random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0  # nosec B311
+                snapshot["gas"] = (
+                    random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
+                )  # nosec B311
+                snapshot["radiation"] = (
+                    random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                )  # nosec B311
                 snapshot["pedestrian"] = False
             elif env == "SPACE":
                 snapshot["radiation"] = random.uniform(0.0, 3.0)  # nosec B311
@@ -182,9 +188,13 @@ class HardwareSynchronizer:
             elif env == "FORESTRY":
                 snapshot["proximity"] = random.uniform(0.0, 1.5)  # nosec B311
                 snapshot["pedestrian"] = bool(random.random() < 0.2)  # nosec B311
-                snapshot["human"] = random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0  # nosec B311
+                snapshot["human"] = (
+                    random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
+                )  # nosec B311
             else:
-                snapshot["proximity"] = random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0  # nosec B311
+                snapshot["proximity"] = (
+                    random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                )  # nosec B311
                 snapshot["pedestrian"] = bool(random.random() < 0.01)  # nosec B311
 
         def read_sensors(self) -> dict[str, Any]:
