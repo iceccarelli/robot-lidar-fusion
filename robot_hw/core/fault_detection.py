@@ -52,7 +52,7 @@ class FaultDetector:
         self._stuck_counters: dict[str, int] = {}
         # Thresholds derived from configuration
         # Maximum allowed latency between sensor updates (seconds)
-        self.max_sensor_latency = getattr(config, 'cycle_time_s', 0.01) * 5.0
+        self.max_sensor_latency = getattr(config, "cycle_time_s", 0.01) * 5.0
         # Maximum allowed positional jump per cycle (units) to detect outliers
         self.max_position_jump = 10.0
         # Number of consecutive identical readings before declaring a stuck sensor
@@ -60,11 +60,11 @@ class FaultDetector:
         # Thresholds for comparing commanded and measured values
         # Pull from configuration with fallbacks
         try:
-            self.max_position_error = float(getattr(config, 'max_position_error', 5.0))
+            self.max_position_error = float(getattr(config, "max_position_error", 5.0))
         except Exception:
             self.max_position_error = 5.0
         try:
-            self.max_velocity_error = float(getattr(config, 'max_velocity_error', 2.0))
+            self.max_velocity_error = float(getattr(config, "max_velocity_error", 2.0))
         except Exception:
             self.max_velocity_error = 2.0
         # Logger for diagnostics
@@ -94,34 +94,37 @@ class FaultDetector:
         self._faults.clear()
         if not isinstance(sensor_data, dict):
             return
-        timestamp = sensor_data.get('timestamp')
-        positions = sensor_data.get('positions', {})
+        timestamp = sensor_data.get("timestamp")
+        positions = sensor_data.get("positions", {})
         # Detect missing timestamp or stale update
         if timestamp is None:
-            self._faults.append('missing_timestamp')
+            self._faults.append("missing_timestamp")
         else:
             try:
                 ts = float(timestamp)
             except Exception:
-                self._faults.append('invalid_timestamp')
+                self._faults.append("invalid_timestamp")
                 ts = None
             if ts is not None and self._last_timestamp is not None:
                 dt = ts - self._last_timestamp
                 # Negative or excessively long intervals indicate a timeout
                 if dt < 0 or dt > self.max_sensor_latency:
-                    self._faults.append('sensor_timeout')
+                    self._faults.append("sensor_timeout")
         # Detect stuck or outlier positions
         if isinstance(positions, dict):
             for jid, pos in positions.items():
                 # Normalise numeric value
                 try:
                     p = float(pos)
-                except Exception:
+                except (TypeError, ValueError):
+                    self._logger.debug("Skipping non-numeric position for joint %s: %r", jid, pos)
                     continue
                 # Retrieve the last position for this joint
                 last_pos = None
-                if self._last_sensor_data and isinstance(self._last_sensor_data.get('positions'), dict):
-                    last_pos = self._last_sensor_data['positions'].get(jid)
+                if self._last_sensor_data and isinstance(
+                    self._last_sensor_data.get("positions"), dict
+                ):
+                    last_pos = self._last_sensor_data["positions"].get(jid)
                     try:
                         last_pos = float(last_pos) if last_pos is not None else None
                     except Exception:
@@ -132,10 +135,12 @@ class FaultDetector:
                 commanded_vel = None
                 if isinstance(actuator_commands, dict):
                     cmd = actuator_commands.get(jid)
-                    if hasattr(cmd, 'velocity'):
-                        commanded_vel = cmd.velocity
+                    if hasattr(cmd, "velocity"):
+                        commanded_vel = (
+                            cmd.velocity if cmd is not None and cmd.velocity is not None else 0.0
+                        )
                     elif isinstance(cmd, dict):
-                        commanded_vel = cmd.get('velocity')
+                        commanded_vel = cmd.get("velocity")
                     try:
                         commanded_vel = float(commanded_vel) if commanded_vel is not None else None
                     except Exception:
@@ -152,10 +157,10 @@ class FaultDetector:
                     self._stuck_counters[jid] = 0
                 # If stuck count exceeds threshold while moving, declare a fault
                 if self._stuck_counters[jid] > self.max_stuck_cycles and moving:
-                    self._faults.append(f'sensor_stuck:{jid}')
+                    self._faults.append(f"sensor_stuck:{jid}")
                 # Outlier detection: large jump from previous position
                 if last_pos is not None and abs(p - last_pos) > self.max_position_jump:
-                    self._faults.append(f'position_outlier:{jid}')
+                    self._faults.append(f"position_outlier:{jid}")
         # ------------------------------------------------------------------
         # Compare commanded vs measured positions and velocities to detect
         # actuator faults such as stalls or misalignment.  Commands are
@@ -164,40 +169,52 @@ class FaultDetector:
         # ``velocity`` fields.  Large deviations trigger faults.
         # ------------------------------------------------------------------
         try:
-            if isinstance(actuator_commands, dict) and isinstance(sensor_data.get('positions'), dict):
+            if isinstance(actuator_commands, dict) and isinstance(
+                sensor_data.get("positions"), dict
+            ):
                 for jid, cmd in actuator_commands.items():
                     # Extract commanded position and velocity if available
                     c_pos = None
                     c_vel = None
-                    if hasattr(cmd, 'position'):
+                    if hasattr(cmd, "position"):
                         c_pos = cmd.position
                         c_vel = cmd.velocity
                     elif isinstance(cmd, dict):
-                        c_pos = cmd.get('position')
-                        c_vel = cmd.get('velocity')
+                        c_pos = cmd.get("position")
+                        c_vel = cmd.get("velocity")
                     # Measured values
-                    m_pos = sensor_data['positions'].get(jid)
-                    m_vel = sensor_data.get('velocities', {}).get(jid) if isinstance(sensor_data.get('velocities'), dict) else None
+                    m_pos = sensor_data["positions"].get(jid)
+                    m_vel = (
+                        sensor_data.get("velocities", {}).get(jid)
+                        if isinstance(sensor_data.get("velocities"), dict)
+                        else None
+                    )
                     # Compare positions
                     if c_pos is not None and m_pos is not None:
                         try:
                             cval = float(c_pos)
                             mval = float(m_pos)
                             if abs(cval - mval) > self.max_position_error:
-                                self._faults.append(f'position_mismatch:{jid}')
-                        except Exception:
-                            pass
+                                self._faults.append(f"position_mismatch:{jid}")
+                        except (TypeError, ValueError):
+                            self._logger.debug(
+                                "Unable to compare commanded and measured position for joint %s",
+                                jid,
+                            )
                     # Compare velocities
                     if c_vel is not None and m_vel is not None:
                         try:
                             cval = float(c_vel)
                             mval = float(m_vel)
                             if abs(cval - mval) > self.max_velocity_error:
-                                self._faults.append(f'velocity_mismatch:{jid}')
-                        except Exception:
-                            pass
+                                self._faults.append(f"velocity_mismatch:{jid}")
+                        except (TypeError, ValueError):
+                            self._logger.debug(
+                                "Unable to compare commanded and measured velocity for joint %s",
+                                jid,
+                            )
         except Exception as exc:
-            self._logger.debug('Error detecting mismatch faults: %s', exc)
+            self._logger.debug("Error detecting mismatch faults: %s", exc)
         # Store current as last for next update
         self._last_sensor_data = sensor_data.copy()
         if timestamp is not None:

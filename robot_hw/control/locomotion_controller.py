@@ -46,9 +46,9 @@ class LocomotionController:
         self._internal_state: dict[str, Any] = {}
         # Determine locomotion mode from config; fallback to environment adapter overrides if available
         try:
-            self._mode = getattr(config, 'locomotion_mode', 'WHEELS').upper()
+            self._mode = getattr(config, "locomotion_mode", "WHEELS").upper()
         except Exception:
-            self._mode = 'WHEELS'
+            self._mode = "WHEELS"
         # Last sensor state for slip detection
         self._last_sensor_state: dict[str, Any] | None = None
         self._slip_counters: dict[str, int] = {}
@@ -96,15 +96,19 @@ class LocomotionController:
             w = 0.0
         commands: dict[str, float] = {}
         # Determine locomotion mode and compute commands accordingly
-        joint_ids = self._config.joint_ids if hasattr(self._config, 'joint_ids') else ()
-        max_vels = self._config.max_velocity_per_joint if hasattr(self._config, 'max_velocity_per_joint') else ()
+        joint_ids = self._config.joint_ids if hasattr(self._config, "joint_ids") else ()
+        max_vels = (
+            self._config.max_velocity_per_joint
+            if hasattr(self._config, "max_velocity_per_joint")
+            else ()
+        )
         mode = self._mode
-        if mode == 'WHEELS' or mode == 'TRACKS':
+        if mode == "WHEELS" or mode == "TRACKS":
             # Map forward (vx) and angular (w) velocity to differential wheels/tracks
             for idx, jid in enumerate(joint_ids):
                 # Determine sign: assume even indices are left, odd are right for tracks
                 side = 1.0
-                if mode == 'TRACKS' and idx % 2 == 0:
+                if mode == "TRACKS" and idx % 2 == 0:
                     side = -1.0
                 # Compute commanded velocity: forward velocity plus angular component
                 cmd = vx + side * w
@@ -112,7 +116,7 @@ class LocomotionController:
                 with contextlib.suppress(Exception):
                     max_v = float(max_vels[idx])
                 commands[jid] = max(-max_v, min(cmd, max_v))
-        elif mode == 'THRUSTERS':
+        elif mode == "THRUSTERS":
             # Use forward and sideways velocities to assign thruster outputs; map each joint to vx, vy combination
             for idx, jid in enumerate(joint_ids):
                 max_v = 1.0
@@ -121,19 +125,23 @@ class LocomotionController:
                 # Alternate thrusters control x and y axes
                 cmd = vx if idx % 2 == 0 else vy
                 commands[jid] = max(-max_v, min(cmd, max_v))
-        elif mode == 'LEGS':
+        elif mode == "LEGS":
             # Generate a simple gait pattern using sinusoidal oscillations for walking
-            t = self._internal_state.get('time', 0.0)
+            t = self._internal_state.get("time", 0.0)
             period = 1.0  # seconds per gait cycle
             amplitude = 0.5 * vx  # scale stride length with desired velocity
             # Update time based on a nominal cycle (assuming compute_commands called at 100 Hz)
             dt = 0.01
-            self._internal_state['time'] = t + dt
+            self._internal_state["time"] = t + dt
             for idx, jid in enumerate(joint_ids):
                 phase = (idx / len(joint_ids)) * math.pi
                 _pos = amplitude * math.sin(2 * math.pi * (t / period) + phase)
                 # Use velocity command equal to derivative of position (approx)
-                vel_cmd = (2 * math.pi / period) * amplitude * math.cos(2 * math.pi * (t / period) + phase)
+                vel_cmd = (
+                    (2 * math.pi / period)
+                    * amplitude
+                    * math.cos(2 * math.pi * (t / period) + phase)
+                )
                 max_v = 1.0
                 with contextlib.suppress(Exception):
                     max_v = float(max_vels[idx])
@@ -146,8 +154,8 @@ class LocomotionController:
                     max_v = float(max_vels[idx])
                 commands[jid] = max(-max_v, min(vx, max_v))
         # Slip detection: compare commanded velocity with measured velocity when available
-        if self._last_sensor_state and isinstance(self._last_sensor_state.get('velocities'), dict):
-            measured = self._last_sensor_state['velocities']
+        if self._last_sensor_state and isinstance(self._last_sensor_state.get("velocities"), dict):
+            measured = self._last_sensor_state["velocities"]
             for jid, cmd_v in commands.items():
                 m_v = measured.get(jid)
                 try:

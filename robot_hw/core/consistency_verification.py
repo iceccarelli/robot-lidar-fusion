@@ -80,7 +80,8 @@ class ConsistencyVerifier:
                 # Verify monotonicity if we have a previous timestamp
                 if self._last_timestamp is not None and ts_val <= self._last_timestamp:
                     self.errors.append(
-                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}")
+                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}"
+                    )
                 self._last_timestamp = ts_val
         # Check positions
         positions = state.get("positions")
@@ -169,4 +170,70 @@ class ConsistencyVerifier:
         hazard_flags = state.get("hazard_flags")
         if hazard_flags is not None and not isinstance(hazard_flags, dict):
             self.errors.append(f"Invalid hazard_flags field (expected dict): {hazard_flags}")
+
+        # Stage 5 navigation and mapping outputs
+        map_summary = state.get("map")
+        if map_summary is not None:
+            if not isinstance(map_summary, dict):
+                self.errors.append(f"Invalid map field (expected dict): {map_summary}")
+            else:
+                for key in ("occupied_cells", "lethal_cells", "inflated_cells"):
+                    value = map_summary.get(key)
+                    if value is not None:
+                        try:
+                            _ = int(value)
+                        except Exception:
+                            self.errors.append(f"Invalid map metric '{key}': {value}")
+
+        nav2_costmap = state.get("nav2_costmap")
+        if nav2_costmap is not None:
+            if not isinstance(nav2_costmap, dict):
+                self.errors.append(f"Invalid nav2_costmap field (expected dict): {nav2_costmap}")
+            else:
+                metadata = nav2_costmap.get("metadata")
+                data = nav2_costmap.get("data")
+                if not isinstance(metadata, dict):
+                    self.errors.append(f"Invalid nav2_costmap metadata: {metadata}")
+                if not isinstance(data, list):
+                    self.errors.append(f"Invalid nav2_costmap data payload: {data}")
+
+        for field_name in ("global_plan", "local_plan"):
+            plan = state.get(field_name)
+            if plan is not None:
+                if not isinstance(plan, list):
+                    self.errors.append(f"Invalid {field_name} field (expected list): {plan}")
+                else:
+                    for idx, waypoint in enumerate(plan):
+                        if not isinstance(waypoint, (list, tuple)) or len(waypoint) < 2:
+                            self.errors.append(
+                                f"Invalid waypoint {idx} in {field_name}: {waypoint}"
+                            )
+                            continue
+                        for coord_idx, value in enumerate(waypoint[:2]):
+                            try:
+                                _ = float(value)
+                            except Exception:
+                                self.errors.append(
+                                    f"Invalid {field_name} waypoint component {idx}:{coord_idx}: {value}"
+                                )
+
+        navigation = state.get("navigation")
+        if navigation is not None and not isinstance(navigation, dict):
+            self.errors.append(f"Invalid navigation field (expected dict): {navigation}")
+
+        locomotion_commands = state.get("locomotion_commands")
+        if locomotion_commands is not None:
+            if not isinstance(locomotion_commands, dict):
+                self.errors.append(
+                    f"Invalid locomotion_commands field (expected dict): {locomotion_commands}"
+                )
+            else:
+                for joint_id, value in locomotion_commands.items():
+                    try:
+                        _ = float(value)
+                    except Exception:
+                        self.errors.append(
+                            f"Invalid locomotion command for joint {joint_id}: {value}"
+                        )
+
         return not self.errors

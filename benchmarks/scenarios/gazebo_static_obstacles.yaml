@@ -1,0 +1,10 @@
+name: gazebo_static_obstacles
+simulator: gazebo
+goal_xy: [1.5, 0.0]
+cycles: 3
+description: Replay-driven local navigation benchmark against static fused obstacles.
+expected_outputs:
+  runtime_metrics_min: 3
+  structured_logs_min: 3
+  navigation_status: planned
+  requires_health_events: false

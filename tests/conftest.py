@@ -28,4 +28,5 @@ if str(_robot_hw) not in sys.path:
 def robot_config():
     """Return a default RobotConfig built from environment defaults."""
     from robot_hw.robot_config import load
+
     return load()

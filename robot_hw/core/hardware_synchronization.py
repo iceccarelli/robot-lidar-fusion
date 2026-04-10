@@ -2,34 +2,33 @@
 Hardware Synchronisation Module
 ===============================
 
-This module defines the `HardwareSynchronizer` class responsible for
-coordinating all actuator commands and sensor readings in a real‑time
-control system.  It provides a single entry point for applying
-batched commands to the hardware interface and returning updated
-sensor data.  All callers should use this module rather than
-interacting with the hardware interface directly to ensure
-deterministic timing and ordering.
+This module defines the :class:`HardwareSynchronizer`, responsible for
+coordinating actuator commands and sensor readings in a deterministic
+control loop. It provides a single entry point for applying a coherent
+batch of actuator commands and then retrieving a consistent sensor
+snapshot that reflects those commands.
+
+The wrapper is intentionally lightweight so it can sit above many
+possible hardware backends. A small in-memory mock backend is included
+for simulation and tests. That mock is designed to integrate cleanly
+with the repository's joint synchroniser, fault detector and
+orchestrator.
 
 Key responsibilities:
 
 * Dispatch actuator commands in a single coherent batch per control
   cycle.
-* Enforce that sensor readings used in a cycle originate from the
-  same timestamp.
-* Provide a stable interface that can be mocked for simulation or
-  unit tests.
-
-The class is deliberately lightweight; heavy lifting (e.g. command
-queueing, driver calls) will live in the underlying hardware interface
-passed to the constructor.  This design allows swapping between
-different hardware backends (real robot, simulator, test harness)
-without changing higher‑level code.
+* Return sensor readings that correspond to the post-command state.
+* Provide a stable mock backend for simulation and unit tests.
+* Preserve deterministic timing semantics for higher-level controllers.
 """
 
 from __future__ import annotations
 
 import contextlib
+import os
 from dataclasses import dataclass
+from secrets import SystemRandom
 from typing import Any
 
 
@@ -37,21 +36,22 @@ from typing import Any
 class ActuatorCommand:
     """Container for actuator commands.
 
-    Each command may specify a desired position, velocity and/or
-    torque.  Omitting a field leaves it unchanged on the hardware.  At
-    least one of the fields should be set for a meaningful command.
-
-    Attributes
+    Parameters
     ----------
     id : str
-        Unique identifier of the actuator (e.g. joint name).
+        Unique actuator identifier, such as a joint name.
     position : float | None
-        Target position in radians/metres; None to leave unchanged.
+        Target position in radians or metres. ``None`` leaves the
+        existing target unchanged.
     velocity : float | None
-        Target velocity; None to leave unchanged.
+        Target velocity in units per second. ``None`` leaves the
+        existing velocity unchanged unless a new position target implies
+        a derived velocity.
     torque : float | None
-        Target torque or force; None to leave unchanged.
+        Target torque or force. ``None`` leaves the existing torque
+        unchanged.
     """
+
     id: str
     position: float | None = None
     velocity: float | None = None
@@ -61,28 +61,11 @@ class ActuatorCommand:
 class HardwareSynchronizer:
     """Synchronise actuator commands and sensor readings.
 
-    The `HardwareSynchronizer` is a thin wrapper around a lower‑level
-    hardware interface.  It is responsible for ensuring that all
-    actuators receive commands in a coordinated manner within a single
-    control cycle and that sensor readings returned to callers are
-    consistent (i.e. originate from the same timestamp).  This class
-    does not block; instead it delegates real‑time constraints to the
-    orchestrator and hardware interface.
-
-    Invariants
-    ----------
-    * Each call to :meth:`sync` must send all accumulated commands
-      together.
-    * Sensor data returned from :meth:`sync` corresponds to the state
-      *after* applying the commands from that same call.
-
-    Notes
-    -----
-    The actual implementation of hardware communication (e.g. CAN bus,
-    serial, Ethernet) should be provided by the `hardware_interface`
-    passed to the constructor.  That object must expose methods to
-    apply a batch of commands and to retrieve a batch of sensor
-    readings.
+    The synchroniser delegates low-level I/O to the supplied hardware
+    interface. Callers interact with one stable method, :meth:`sync`,
+    which applies a command batch and then reads a sensor snapshot.
+    This preserves causal ordering and keeps higher-level modules
+    independent from backend-specific details.
     """
 
     def __init__(self, hardware_interface: Any) -> None:
@@ -91,143 +74,166 @@ class HardwareSynchronizer:
         Parameters
         ----------
         hardware_interface : Any
-            An object responsible for low‑level communication with the
-            robot hardware.  It must implement a method
-            ``apply_commands(commands: Dict[str, ActuatorCommand]) -> None``
-            and a method ``read_sensors() -> Dict[str, Any]`` which
-            returns the latest sensor states.
+            Backend object expected to expose
+            ``apply_commands(commands: dict[str, ActuatorCommand])`` and
+            ``read_sensors() -> dict[str, Any]`` methods.
         """
         self._hardware = hardware_interface
 
-    # ------------------------------------------------------------------
-    # Optional mock implementation for testing and simulation
-    # ------------------------------------------------------------------
     class MockHardwareInterface:
-        """A simple in‑memory hardware interface for testing.
+        """Simple in-memory backend for tests and simulation.
 
-        This mock allows the synchroniser to be used without real hardware.
-        It stores actuator states in a dictionary and updates them when
-        commands are applied.  Sensor readings simply return the
-        internal state.
+        The mock updates joint velocities and evolves joint position
+        consistently for velocity-driven commands so the resulting sensor
+        snapshots remain coherent for the repository's simulation,
+        navigation, and fault-detection flows.
         """
 
-        def __init__(self) -> None:
-            # Internal state keyed by actuator ID; each value is a dict
-            # with position, velocity and torque.
+        def __init__(self, cycle_time_s: float = 0.01) -> None:
             self.states: dict[str, dict[str, float]] = {}
-            # Monotonic timestamp updated on each apply or read.  We use
-            # a simple counter in lieu of real time for determinism.
             self._timestamp: float = 0.0
+            self._cycle_time_s: float = float(cycle_time_s) if cycle_time_s > 0.0 else 0.01
+            self._rng = SystemRandom()
+
+        @staticmethod
+        def _as_float(value: Any, default: float = 0.0) -> float:
+            """Coerce ``value`` to ``float`` with a safe fallback."""
+            try:
+                return float(value)
+            except Exception:
+                return float(default)
+
+        def _state_for(self, actuator_id: str) -> dict[str, float]:
+            """Return the mutable state dictionary for one actuator."""
+            return self.states.setdefault(
+                actuator_id,
+                {"position": 0.0, "velocity": 0.0, "torque": 0.0},
+            )
 
         def apply_commands(self, commands: dict[str, ActuatorCommand]) -> None:
-            for aid, cmd in commands.items():
-                state = self.states.setdefault(aid, {"position": 0.0, "velocity": 0.0, "torque": 0.0})
-                # Update only fields that are provided
-                if cmd.position is not None:
-                    state["position"] = float(cmd.position)
-                if cmd.velocity is not None:
-                    state["velocity"] = float(cmd.velocity)
-                if cmd.torque is not None:
-                    state["torque"] = float(cmd.torque)
+            """Apply one control batch to the simulated actuator state.
 
-        def read_sensors(self) -> dict[str, dict[str, float]]:
-            """Return a snapshot of all actuator states with a timestamp and hazard signals.
-
-            Each actuator entry is a shallow copy of the internal state
-            (position, velocity, torque).  The returned dictionary also
-            includes a top‑level ``timestamp`` indicating the time of the
-            reading.  In addition, environment‑specific hazard signals
-            (e.g. gas concentration, radiation levels, proximity to
-            obstacles) are synthesised to emulate sensor inputs in
-            extreme environments.  Hazard values are generated
-            probabilistically based on the current ``ENVIRONMENT_PROFILE``.
-
-            In this mock implementation, the timestamp is incremented
-            by 0.01 seconds on each call to simulate a 100 Hz control loop.
-            Real implementations should use high‑precision monotonic timers.
+            Position-only commands update the joint position directly and
+            derive a velocity estimate from the displacement over the
+            mock cycle time. Velocity-only commands advance the stored
+            position by ``velocity * cycle_time`` so the simulated sensor
+            state evolves in a way that the fault detector recognises as
+            healthy motion.
             """
-            # Increment the internal timestamp to simulate elapsed time
-            self._timestamp += 0.01
-            snapshot: dict[str, Any] = {aid: state.copy() for aid, state in self.states.items()}
-            snapshot["timestamp"] = self._timestamp
-            # Inject synthetic hazard signals to emulate environment sensors
-            try:
-                import os
-                import random
-                env = os.getenv("ENVIRONMENT_PROFILE", "GENERAL").strip().upper()
-                # Define hazard injection per environment
-                if env == "MINING":
-                    # Gas and radiation hazards occur frequently in mining
-                    snapshot["gas"] = random.uniform(0.0, 3.0)
-                    snapshot["radiation"] = random.uniform(0.0, 2.0)
-                    snapshot["high_voltage"] = random.uniform(0.0, 10.0)
-                    # Occasional trains or pedestrians in tunnels
-                    snapshot["train"] = random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
-                    snapshot["pedestrian"] = bool(random.random() < 0.05)
-                elif env == "UNDERWATER":
-                    # Obstacles within a few metres detected by sonar
-                    snapshot["proximity"] = random.uniform(0.0, 2.0)
-                    # Rare gas leaks or radiation underwater
-                    snapshot["gas"] = random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
-                    snapshot["radiation"] = random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
-                    snapshot["pedestrian"] = False
-                elif env == "SPACE":
-                    # High radiation and electrical hazards in space operations
-                    snapshot["radiation"] = random.uniform(0.0, 3.0)
-                    snapshot["high_voltage"] = random.uniform(0.0, 20.0)
-                    # Proximity values are less relevant; objects are far away
-                    snapshot["proximity"] = random.uniform(0.0, 10.0)
-                    snapshot["pedestrian"] = False
-                elif env == "FORESTRY":
-                    # Frequent obstacles and humans in forestry
-                    snapshot["proximity"] = random.uniform(0.0, 1.5)
-                    snapshot["pedestrian"] = bool(random.random() < 0.2)
-                    # Occasionally detect a human or animal close by
-                    snapshot["human"] = random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
+            if not isinstance(commands, dict):
+                return
+
+            dt = self._cycle_time_s
+            for actuator_id, command in commands.items():
+                if not isinstance(command, ActuatorCommand):
+                    continue
+
+                state = self._state_for(actuator_id)
+                previous_position = self._as_float(state.get("position"), 0.0)
+                previous_velocity = self._as_float(state.get("velocity"), 0.0)
+                previous_torque = self._as_float(state.get("torque"), 0.0)
+
+                next_velocity = previous_velocity
+                if command.velocity is not None:
+                    next_velocity = self._as_float(command.velocity, previous_velocity)
+
+                if command.position is not None:
+                    next_position = self._as_float(command.position, previous_position)
+                    if command.velocity is None and dt > 0.0:
+                        next_velocity = (next_position - previous_position) / dt
                 else:
-                    # Generic environment: occasional obstacles but mostly clear
-                    snapshot["proximity"] = random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
-                    snapshot["pedestrian"] = bool(random.random() < 0.01)
-            except Exception:
-                # If hazard injection fails, proceed with the basic snapshot
-                pass
+                    next_position = previous_position + (next_velocity * dt)
+
+                next_torque = previous_torque
+                if command.torque is not None:
+                    next_torque = self._as_float(command.torque, previous_torque)
+
+                state["position"] = next_position
+                state["velocity"] = next_velocity
+                state["torque"] = next_torque
+
+        def _inject_environment_signals(self, snapshot: dict[str, Any]) -> None:
+            """Add simple synthetic environment signals to the snapshot.
+
+            These signals intentionally remain lightweight and best-effort.
+            They support the repository's simulation paths without
+            imposing requirements on production backends.
+            """
+            env = os.getenv("ENVIRONMENT_PROFILE", "GENERAL").strip().upper()
+            rng = self._rng
+
+            if env == "MINING":
+                snapshot["gas"] = rng.uniform(0.0, 3.0)
+                snapshot["radiation"] = rng.uniform(0.0, 2.0)
+                snapshot["high_voltage"] = rng.uniform(0.0, 10.0)
+                snapshot["train"] = rng.uniform(0.0, 3.0) if rng.random() < 0.1 else 5.0
+                snapshot["pedestrian"] = rng.random() < 0.05
+            elif env == "UNDERWATER":
+                snapshot["proximity"] = rng.uniform(0.0, 2.0)
+                snapshot["gas"] = rng.uniform(0.0, 0.5) if rng.random() < 0.05 else 0.0
+                snapshot["radiation"] = rng.uniform(0.0, 1.0) if rng.random() < 0.02 else 0.0
+                snapshot["pedestrian"] = False
+            elif env == "SPACE":
+                snapshot["radiation"] = rng.uniform(0.0, 3.0)
+                snapshot["high_voltage"] = rng.uniform(0.0, 20.0)
+                snapshot["proximity"] = rng.uniform(0.0, 10.0)
+                snapshot["pedestrian"] = False
+            elif env == "FORESTRY":
+                snapshot["proximity"] = rng.uniform(0.0, 1.5)
+                snapshot["pedestrian"] = rng.random() < 0.2
+                snapshot["human"] = rng.uniform(0.0, 2.0) if rng.random() < 0.1 else 5.0
+            else:
+                snapshot["proximity"] = rng.uniform(0.0, 5.0) if rng.random() < 0.05 else 5.0
+                snapshot["pedestrian"] = rng.random() < 0.01
+
+        def read_sensors(self) -> dict[str, Any]:
+            """Return a consistent sensor snapshot for the current state.
+
+            The timestamp advances once per sensor read using the fixed
+            mock cycle time. Each actuator entry is returned as a fresh
+            shallow copy containing ``position``, ``velocity`` and
+            ``torque``.
+            """
+            self._timestamp += self._cycle_time_s
+            snapshot: dict[str, Any] = {
+                actuator_id: {
+                    "position": self._as_float(state.get("position"), 0.0),
+                    "velocity": self._as_float(state.get("velocity"), 0.0),
+                    "torque": self._as_float(state.get("torque"), 0.0),
+                }
+                for actuator_id, state in self.states.items()
+            }
+            snapshot["timestamp"] = self._timestamp
+
+            with contextlib.suppress(Exception):
+                self._inject_environment_signals(snapshot)
             return snapshot
 
     def sync(self, commands: dict[str, ActuatorCommand]) -> dict[str, Any]:
-        """Apply a batch of commands and return updated sensor data.
-
-        This method should be called exactly once per control cycle by
-        the orchestrator.  It applies all provided commands to the
-        hardware interface and then reads back the sensor data.  The
-        ordering is critical: commands are applied first, then sensors
-        are read, ensuring causal consistency.  Callers must not
-        mutate the `commands` dictionary after passing it to this
-        method.
+        """Apply a batch of actuator commands and return sensor data.
 
         Parameters
         ----------
         commands : dict[str, ActuatorCommand]
-            A mapping from actuator identifiers to their desired
-            commands for this cycle.
+            Mapping of actuator identifiers to commands for the current
+            control step.
 
         Returns
         -------
         dict[str, Any]
-            A mapping from actuator identifiers to sensor readings.
-            The exact structure of each entry depends on the
-            underlying hardware interface but typically includes
-            position, velocity, torque, temperature and a timestamp.
+            Raw sensor snapshot produced by the backend. The snapshot is
+            returned as a plain dictionary so upstream callers can safely
+            normalise or copy it.
         """
-        # If no commands are provided, we still read sensors to
-        # maintain synchronisation.
         if hasattr(self._hardware, "apply_commands"):
             with contextlib.suppress(Exception):
                 self._hardware.apply_commands(commands)
+
         if hasattr(self._hardware, "read_sensors"):
             try:
-                return self._hardware.read_sensors()
+                sensor_state = self._hardware.read_sensors()
+                return dict(sensor_state) if isinstance(sensor_state, dict) else {}
             except Exception:
-                # TODO: log and propagate sensor reading errors
                 return {}
-        # Fallback: return empty sensor data if interface lacks methods
+
         return {}
