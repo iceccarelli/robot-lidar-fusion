@@ -1,17 +1,14 @@
 """
-Robot Configuration Parser
-==========================
+Robot configuration parsing and validation.
 
-This module centralises the parsing of environment variables for the
-humanoid robot control system. It is analogous to the robot domain's
-configuration entrypoint and parses environment variables into a typed
-``RobotConfig`` dataclass using helper functions to normalise booleans,
-lists, floats and integers. Defaults are specified for each field to
-allow reasonable out-of-the-box behaviour.
+This module provides the single typed configuration entrypoint for the
+robot platform. Environment variables are normalised into an immutable
+``RobotConfig`` instance so the rest of the package can depend on a
+stable, validated configuration object.
 
-Secrets (e.g. ``ROBOT_CONTROL_KEY``) are treated as opaque strings and
-should be supplied via a secrets manager in production. This parser does
-not perform any network I/O; it merely reads from the local environment.
+The implementation is intentionally environment-first and side-effect
+free. It performs no network or hardware I/O and is therefore safe to
+import in local development, CI, and packaging workflows.
 """
 
 from __future__ import annotations
@@ -21,25 +18,25 @@ from dataclasses import dataclass
 
 
 def _b(name: str, default: bool = False) -> bool:
-    """Parse an environment variable into a boolean.
-
-    Accepted true values are ``1, true, t, yes, y, on``
-    (case-insensitive). If the variable is not present, ``default`` is
-    returned.
-    """
-    value = os.getenv(name)
-    if value is None:
+    """Parse an environment variable into a boolean."""
+    raw = os.getenv(name)
+    if raw is None:
         return default
-    return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+    return raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
-def _f(name: str, default: float, *, min: float | None = None, max: float | None = None) -> float:
+def _f(
+    name: str,
+    default: float,
+    *,
+    min: float | None = None,
+    max: float | None = None,
+) -> float:
     """Parse an environment variable into a float with optional bounds."""
     raw = os.getenv(name)
-    parsed_raw = "" if raw is None else raw
     try:
-        value = default if parsed_raw == "" else float(parsed_raw)
-    except (TypeError, ValueError):
+        value = default if raw is None or raw.strip() == "" else float(raw)
+    except ValueError:
         value = default
     if min is not None and value < min:
         raise ValueError(f"{name}={value} is below minimum {min}")
@@ -48,13 +45,18 @@ def _f(name: str, default: float, *, min: float | None = None, max: float | None
     return value
 
 
-def _i(name: str, default: int, *, min: int | None = None, max: int | None = None) -> int:
+def _i(
+    name: str,
+    default: int,
+    *,
+    min: int | None = None,
+    max: int | None = None,
+) -> int:
     """Parse an environment variable into an integer with optional bounds."""
     raw = os.getenv(name)
-    parsed_raw = "" if raw is None else raw
     try:
-        value = default if parsed_raw == "" else int(parsed_raw)
-    except (TypeError, ValueError):
+        value = default if raw is None or raw.strip() == "" else int(raw)
+    except ValueError:
         value = default
     if min is not None and value < min:
         raise ValueError(f"{name}={value} is below minimum {min}")
@@ -66,41 +68,43 @@ def _i(name: str, default: int, *, min: int | None = None, max: int | None = Non
 def _optional_i(name: str) -> int | None:
     """Parse an optional integer environment variable.
 
-    Returns ``None`` when the variable is unset, empty, or explicitly
-    set to ``none``.
+    The values ``None``, an empty string, and the case-insensitive token
+    ``none`` are all treated as the absence of a value.
     """
     raw = os.getenv(name)
     if raw is None:
         return None
     stripped = raw.strip()
-    if not stripped or stripped.lower() == "none":
+    if stripped == "" or stripped.lower() == "none":
         return None
     return int(stripped)
 
 
 def _csv(name: str, default: str) -> tuple[str, ...]:
-    """Parse a comma-separated list into a tuple of strings."""
+    """Parse a comma-separated environment variable into a tuple of strings."""
     raw = os.getenv(name, default)
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 def _floats_csv(name: str, default: str) -> tuple[float, ...]:
-    """Parse a comma-separated list into a tuple of floats."""
+    """Parse a comma-separated environment variable into a tuple of floats."""
     raw = os.getenv(name, default)
     values: list[float] = []
     for part in raw.split(","):
         stripped = part.strip()
-        if not stripped:
+        if stripped == "":
             continue
         try:
             values.append(float(stripped))
-        except (TypeError, ValueError) as err:
+        except ValueError as err:
             raise ValueError(f"Invalid float in {name}: {stripped}") from err
     return tuple(values)
 
 
 @dataclass(frozen=True)
 class RobotConfig:
+    """Typed runtime configuration for the robot platform."""
+
     robot_environment: str
     operation_mode: str
     simulator_enabled: bool
@@ -158,7 +162,7 @@ class RobotConfig:
 
 
 def load() -> RobotConfig:
-    """Load the robot configuration from environment variables."""
+    """Load and validate runtime configuration from environment variables."""
     power_budget_w = _f("POWER_BUDGET_W", 100.0, min=0.0)
     max_temperature_c = _f("MAX_TEMPERATURE_C", 60.0)
 
@@ -171,8 +175,14 @@ def load() -> RobotConfig:
         actuator_types=_csv("ACTUATOR_TYPES", "servo,servo,servo,servo"),
         max_torque_util=_f("MAX_TORQUE_UTIL", 1.0, min=0.0, max=1.0),
         default_torque_mult=_f("DEFAULT_TORQUE_MULT", 0.5, min=0.0),
-        max_velocity_per_joint=_floats_csv("MAX_VELOCITY_PER_JOINT", "1.0,1.0,1.0,1.0"),
-        max_torque_per_joint=_floats_csv("MAX_TORQUE_PER_JOINT", "1.5,1.5,1.5,1.5"),
+        max_velocity_per_joint=_floats_csv(
+            "MAX_VELOCITY_PER_JOINT",
+            "1.0,1.0,1.0,1.0",
+        ),
+        max_torque_per_joint=_floats_csv(
+            "MAX_TORQUE_PER_JOINT",
+            "1.5,1.5,1.5,1.5",
+        ),
         min_safety_margin=_f("MIN_SAFETY_MARGIN", 0.1, min=0.0, max=1.0),
         fault_temperature_buffer=_f("FAULT_TEMPERATURE_BUFFER", 5.0, min=0.0),
         max_heat_accumulation=_f("MAX_HEAT_ACCUMULATION", 0.8, min=0.0, max=1.0),
@@ -182,7 +192,7 @@ def load() -> RobotConfig:
         low_battery_threshold=_f("LOW_BATTERY_THRESHOLD", 0.2, min=0.0, max=1.0),
         max_temperature_c=max_temperature_c,
         cooling_hysteresis_c=_f("COOLING_HYSTERESIS_C", 5.0, min=0.0),
-        total_memory_bytes=_i("TOTAL_MEMORY_BYTES", 1048576, min=0),
+        total_memory_bytes=_i("TOTAL_MEMORY_BYTES", 1_048_576, min=0),
         lock_names=_csv("LOCK_NAMES", "hardware,memory,tasks"),
         enable_monitoring_ui=_b("ENABLE_MONITORING_UI", False),
         monitor_port=_i("MONITOR_PORT", 8051, min=0),
@@ -225,3 +235,6 @@ def load() -> RobotConfig:
         imu_port=_i("IMU_PORT", 7503, min=0),
         camera_device=_optional_i("CAMERA_DEVICE"),
     )
+
+
+__all__ = ["RobotConfig", "load"]

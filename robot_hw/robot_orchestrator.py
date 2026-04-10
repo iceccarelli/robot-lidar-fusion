@@ -1,42 +1,16 @@
-"""
-Robot Orchestrator
-===================
+"""Robot orchestrator for the integrated hardware, planning, and telemetry stack.
 
-This module defines a `RobotOrchestrator` class that ties together all
-the core modules developed for the humanoid robot control system. It
-instantiates each manager (hardware synchronisation, joint
-synchronisation, battery management, thermal management, memory
-management, consistency verification, concurrency management and task
-mapping) and runs a deterministic control loop at a fixed frequency.
+This module defines :class:`RobotOrchestrator`, the top-level coordinator for
+simulation and hardware-adjacent execution. The orchestrator is responsible for
+reading the latest joint state, fusing optional perception inputs, updating
+fault and hazard models, planning high-level work, mapping tasks to joint
+commands, dispatching those commands to the joint synchronizer, and publishing
+telemetry.
 
-The orchestrator is responsible for the following sequence in each
-control cycle:
-
-1. **Read sensor data:** Retrieve the latest sensor state from the
-   hardware via the `HardwareSynchronizer`. In this mock
-   implementation, the hardware synchroniser also applies the
-   commands queued from the previous cycle.
-2. **Update managers:** Update the battery and thermal managers with
-   the new sensor data and check whether the system remains safe. If
-   safety checks fail, the orchestrator may trigger an emergency stop.
-3. **Run scheduled tasks:** Process any tasks in the execution stack.
-   Tasks may schedule new high-level tasks or compute joint commands.
-4. **Map high-level tasks:** Convert any high-level tasks into joint
-   instructions using the task-hardware mapper and kinematics model.
-5. **Synchronise joints:** Send the computed joint commands to the
-   `JointSynchronizer` which applies velocity/torque limits and
-   dispatches them via the `HardwareSynchronizer`.
-6. **Verify consistency:** Use the `ConsistencyVerifier` to ensure
-   the returned state is consistent (e.g. monotonic timestamps,
-   numeric positions). Log or handle any inconsistencies.
-7. **Maintain timing:** Ensure that the loop runs at the configured
-   frequency by sleeping for the remainder of the cycle time.
-
-This skeleton implementation demonstrates the interactions between
-modules without requiring real hardware or sensors. A `MockHardware`
-interface is used internally. Future work should extend this
-orchestrator to include proper error handling, logging, telemetry
-integration and external task submission interfaces.
+The implementation is intentionally deterministic and conservative. It keeps the
+control loop structure simple, preserves the existing repository interfaces, and
+provides stable behavior for both repeated smoke tests and multi-call
+simulation entry points.
 """
 
 from __future__ import annotations
@@ -44,7 +18,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
-from typing import Any
+from typing import Any, Final
 
 from robot_hw.control.joint_synchronization import JointCommand, JointSynchronizer
 from robot_hw.control.locomotion_controller import LocomotionController
@@ -77,41 +51,44 @@ from robot_hw.telemetry.runtime_metrics import (
 )
 
 
+_PRESERVED_STATE_KEYS: Final[tuple[str, ...]] = (
+    "fusion",
+    "hazards",
+    "proximity",
+    "pedestrian",
+    "hazard_flags",
+    "navigation",
+    "map",
+    "nav2_costmap",
+    "global_plan",
+    "local_plan",
+    "locomotion_commands",
+)
+
+
 class DummyKinematicsModel:
-    """A minimal kinematics model used for demonstration.
+    """Minimal kinematics model used when no robot-specific solver is available."""
 
-    The model simply passes through joint commands if provided via
-    ``joint_positions`` in the target parameters. Otherwise it returns
-    a fixed mapping for demonstration purposes. Real implementations
-    should provide inverse kinematics solving.
-    """
-
-    def inverse_kinematics(self, target: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    def inverse_kinematics(
+        self,
+        target: dict[str, Any],
+        current: dict[str, Any],
+    ) -> dict[str, Any]:
+        del current
         if "joint_positions" in target:
-            return {jid: {"position": pos} for jid, pos in target["joint_positions"].items()}
+            joint_positions = target["joint_positions"]
+            if isinstance(joint_positions, dict):
+                return {
+                    str(joint_id): {"position": position}
+                    for joint_id, position in joint_positions.items()
+                }
         x = float(target.get("x", 0.0))
         y = float(target.get("y", 0.0))
         return {"joint1": {"position": x}, "joint2": {"position": y}}
 
 
 class RobotOrchestrator:
-    """Main orchestrator for the humanoid robot control system.
-
-    Parameters
-    ----------
-    cycle_time : float
-        Duration of each control cycle in seconds (e.g. 0.01 for 100 Hz).
-    total_memory_bytes : int
-        Total memory to manage via the `MemoryManager`.
-    battery_capacity_wh : float
-        Rated battery capacity in watt-hours for runtime estimation.
-    max_temperature : float
-        Maximum allowed temperature (°C) for the thermal manager.
-    max_velocity : float
-        Default maximum joint velocity.
-    max_torque : float
-        Default maximum joint torque.
-    """
+    """Coordinate sensing, planning, actuation, and telemetry for the robot stack."""
 
     def __init__(
         self,
@@ -124,6 +101,8 @@ class RobotOrchestrator:
     ) -> None:
         self._logger = logging.getLogger(__name__)
         self.cycle_time = cycle_time
+        self._cycle_index = 0
+
         self.hardware = HardwareSynchronizer(HardwareSynchronizer.MockHardwareInterface())
         self.joint_sync = JointSynchronizer(
             self.hardware,
@@ -139,11 +118,13 @@ class RobotOrchestrator:
         self.concurrency_manager = ConcurrencyManager()
         self.kinematics_model: KinematicsModel = DummyKinematicsModel()  # type: ignore[assignment]
         self.task_mapper = TaskHardwareMapper(self.kinematics_model)
+
         self.pending_tasks: list[Task] = []
         self.current_state: dict[str, Any] = {}
         self.runtime_metrics_history: list[dict[str, Any]] = []
         self.structured_logs: list[dict[str, Any]] = []
         self.health_events: list[dict[str, Any]] = []
+        self._last_joint_commands: dict[str, JointCommand] = {}
 
         self.config = load_config()
         self.sensor_processor = SensorProcessor(self.config)
@@ -151,27 +132,10 @@ class RobotOrchestrator:
         self.navigation_manager = NavigationManager(self.config)
         self.locomotion_controller = LocomotionController(self.config)
         self.fault_detector = FaultDetector(self.config)
-        self._last_joint_commands: dict[str, JointCommand] = {}
         self.environment_adapter = EnvironmentAdapter(self.config)
-
-        with contextlib.suppress(Exception):
-            self.environment_adapter.configure()
-        self.environment_overrides = self.environment_adapter.get_current_limits()
-
-        env_thermal = self.environment_overrides.get("thermal_limit_c")
-        if env_thermal is not None:
-            self.thermal_manager.max_temp = float(env_thermal)
-
-        self._apply_sensor_processor_overrides(self.environment_overrides)
-        self._apply_locomotion_override(self.environment_overrides)
-
+        self.environment_overrides: dict[str, Any] = {}
         self._current_env_profile = self.config.environment_profile
-        self.mission_planner = MissionPlanner(
-            self.config,
-            self.battery_manager,
-            self.thermal_manager,
-            self.hazard_manager,
-        )
+
         self.communication = CommunicationInterface(self.config)
         with contextlib.suppress(Exception):
             self.communication.connect()
@@ -181,96 +145,154 @@ class RobotOrchestrator:
         self.sensor_io: Any | None = None
         self.time_sync: TimeSync | None = None
 
+        self._configure_environment()
+        self._initialise_sensor_interfaces()
+        self.mission_planner = MissionPlanner(
+            self.config,
+            self.battery_manager,
+            self.thermal_manager,
+            self.hazard_manager,
+        )
+
+    def _configure_environment(self) -> None:
+        """Apply environment-derived overrides to runtime components."""
+        with contextlib.suppress(Exception):
+            self.environment_adapter.configure()
+        self.environment_overrides = self.environment_adapter.get_current_limits()
+
+        thermal_limit = self.environment_overrides.get("thermal_limit_c")
+        if thermal_limit is not None:
+            self.thermal_manager.max_temp = float(thermal_limit)
+
+        self._apply_sensor_processor_overrides(self.environment_overrides)
+        self._apply_locomotion_override(self.environment_overrides)
+
+    def _initialise_sensor_interfaces(self) -> None:
+        """Initialise optional LiDAR, camera, and time-sync interfaces."""
+        self.lidar_io = None
+        self.camera_io = None
+        self.sensor_io = None
+        self.time_sync = None
+
         try:
-            if self.config.enable_lidar or self.config.enable_camera:
-                self.time_sync = TimeSync()
-                if self.config.use_ros2:
-                    try:
-                        from perception.sensor_io_ros2 import Ros2SensorIO  # type: ignore
+            if not (self.config.enable_lidar or self.config.enable_camera):
+                return
 
-                        self.sensor_io = Ros2SensorIO(
-                            lidar_topic=self.config.lidar_topic,
-                            camera_topic=self.config.camera_topic,
-                            camera_info_topic=self.config.camera_info_topic,
-                        )
-                        self.sensor_io.start()
-                    except Exception as exc:
-                        self._logger.debug("Failed to initialise ROS2 sensor I/O: %s", exc)
-                        self.sensor_io = None
-                else:
-                    from perception.sensor_io_direct import (  # type: ignore
-                        OusterSDKSensorIO,
-                        UvcCameraSensorIO,
+            self.time_sync = TimeSync()
+            if self.config.use_ros2:
+                try:
+                    from perception.sensor_io_ros2 import Ros2SensorIO  # type: ignore
+
+                    self.sensor_io = Ros2SensorIO(
+                        lidar_topic=self.config.lidar_topic,
+                        camera_topic=self.config.camera_topic,
+                        camera_info_topic=self.config.camera_info_topic,
                     )
+                    self.sensor_io.start()
+                except Exception as exc:
+                    self._logger.debug("Failed to initialise ROS2 sensor I/O: %s", exc)
+                    self.sensor_io = None
+                return
 
-                    if self.config.enable_lidar:
-                        try:
-                            self.lidar_io = OusterSDKSensorIO(
-                                host_ip=self.config.host_ip,
-                                lidar_ip=self.config.lidar_ip,
-                                lidar_port=self.config.lidar_port,
-                                imu_port=self.config.imu_port,
-                            )
-                            self.lidar_io.start()
-                        except Exception as exc:
-                            self._logger.debug("Failed to initialise LiDAR sensor I/O: %s", exc)
-                            self.lidar_io = None
-                    if self.config.enable_camera:
-                        try:
-                            self.camera_io = UvcCameraSensorIO(device=self.config.camera_device)
-                            self.camera_io.start()
-                        except Exception as exc:
-                            self._logger.debug("Failed to initialise camera sensor I/O: %s", exc)
-                            self.camera_io = None
+            from perception.sensor_io_direct import (  # type: ignore
+                OusterSDKSensorIO,
+                UvcCameraSensorIO,
+            )
+
+            if self.config.enable_lidar:
+                try:
+                    self.lidar_io = OusterSDKSensorIO(
+                        host_ip=self.config.host_ip,
+                        lidar_ip=self.config.lidar_ip,
+                        lidar_port=self.config.lidar_port,
+                        imu_port=self.config.imu_port,
+                    )
+                    self.lidar_io.start()
+                except Exception as exc:
+                    self._logger.debug("Failed to initialise LiDAR sensor I/O: %s", exc)
+                    self.lidar_io = None
+
+            if self.config.enable_camera:
+                try:
+                    self.camera_io = UvcCameraSensorIO(device=self.config.camera_device)
+                    self.camera_io.start()
+                except Exception as exc:
+                    self._logger.debug("Failed to initialise camera sensor I/O: %s", exc)
+                    self.camera_io = None
         except Exception as exc:
             self._logger.debug("Sensor ingestion initialisation failed: %s", exc)
-            self.sensor_io = None
             self.lidar_io = None
             self.camera_io = None
+            self.sensor_io = None
             self.time_sync = None
 
+    def _reconfigure_if_needed(self) -> None:
+        """Reload configuration when runtime settings have changed."""
+        try:
+            new_config = load_config()
+        except Exception:
+            return
+
+        if new_config == self.config:
+            return
+
+        self.config = new_config
+        self._current_env_profile = new_config.environment_profile
+        self.sensor_processor = SensorProcessor(self.config)
+        self.hazard_manager = HazardManager(self.config)
+        self.navigation_manager = NavigationManager(self.config)
+        self.locomotion_controller = LocomotionController(self.config)
+        self.fault_detector = FaultDetector(self.config)
+        self.environment_adapter = EnvironmentAdapter(self.config)
+        self.communication = CommunicationInterface(self.config)
+        with contextlib.suppress(Exception):
+            self.communication.connect()
+
+        self._configure_environment()
+        self._initialise_sensor_interfaces()
+        self.mission_planner = MissionPlanner(
+            self.config,
+            self.battery_manager,
+            self.thermal_manager,
+            self.hazard_manager,
+        )
+
     def _apply_sensor_processor_overrides(self, overrides: dict[str, Any]) -> None:
-        """Apply environment-derived overrides to the sensor processor."""
+        """Apply environment overrides to the sensor processor."""
         try:
             noise_override = overrides.get("sensor_noise_std")
             if noise_override is not None:
                 self.sensor_processor._noise_std = float(noise_override)  # type: ignore[attr-defined]
-            types_override = overrides.get("environment_sensor_types")
-            if types_override:
-                self.sensor_processor._sensor_types = tuple(types_override)  # type: ignore[attr-defined]
+            sensor_types = overrides.get("environment_sensor_types")
+            if sensor_types:
+                self.sensor_processor._sensor_types = tuple(sensor_types)  # type: ignore[attr-defined]
         except (TypeError, ValueError) as exc:
             self._logger.debug("Failed to apply sensor processor overrides: %s", exc)
 
     def _apply_locomotion_override(self, overrides: dict[str, Any]) -> None:
-        """Apply environment-derived overrides to the locomotion controller."""
+        """Apply environment overrides to the locomotion controller."""
         try:
-            loc_override = overrides.get("locomotion_mode")
-            if loc_override:
-                self.locomotion_controller._mode = str(loc_override).upper()  # type: ignore[attr-defined]
+            locomotion_mode = overrides.get("locomotion_mode")
+            if locomotion_mode:
+                self.locomotion_controller._mode = str(locomotion_mode).upper()  # type: ignore[attr-defined]
         except (TypeError, ValueError) as exc:
             self._logger.debug("Failed to apply locomotion override: %s", exc)
 
     def _normalise_state(self, sensor_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert raw sensor data into a unified state structure.
-
-        The hardware synchroniser returns a dictionary keyed by joint IDs
-        with sub-fields ``position``, ``velocity`` and ``torque``. It
-        also contains a top-level ``timestamp`` entry. This helper
-        extracts these fields into separate dictionaries for positions,
-        velocities and torques, and preserves the timestamp. Missing
-        values are left as ``None``.
-        """
+        """Convert raw hardware payloads into the orchestrator state shape."""
         positions: dict[str, Any] = {}
         velocities: dict[str, Any] = {}
         torques: dict[str, Any] = {}
         timestamp = sensor_data.get("timestamp")
-        for joint_id, info in sensor_data.items():
-            if joint_id in {"timestamp", "proximity", "hazards", "pedestrian"}:
+
+        for key, value in sensor_data.items():
+            if key in {"timestamp", "proximity", "hazards", "pedestrian"}:
                 continue
-            if isinstance(info, dict):
-                positions[joint_id] = info.get("position")
-                velocities[joint_id] = info.get("velocity")
-                torques[joint_id] = info.get("torque")
+            if isinstance(value, dict):
+                positions[key] = value.get("position")
+                velocities[key] = value.get("velocity")
+                torques[key] = value.get("torque")
+
         state: dict[str, Any] = {"timestamp": timestamp, "positions": positions}
         if velocities:
             state["velocities"] = velocities
@@ -278,203 +300,154 @@ class RobotOrchestrator:
             state["torques"] = torques
         return state
 
-    def submit_task(self, task: Task) -> None:
-        """Queue a high-level task for execution in the next control cycle."""
-        with self.concurrency_manager.acquire("tasks"):
-            self.pending_tasks.append(task)
+    def _read_augmented_state(self) -> None:
+        """Synchronise hardware, fuse optional sensor inputs, and update state."""
+        with self.concurrency_manager.acquire("hardware"):
+            sensor_data = self.hardware.sync({})
 
-    def submit_goal(self, goal: dict[str, Any]) -> None:
-        """Submit a high-level mission goal to the mission planner.
+        self.current_state = self._normalise_state(sensor_data)
+        augmented_state = dict(self.current_state)
 
-        The goal is forwarded to the mission planner and, when it includes
-        planar ``x``/``y`` coordinates, also becomes the active navigation
-        target for map-based planning and replanning.
-        """
-        self.mission_planner.add_goal(goal)
-        if isinstance(goal, dict) and "x" in goal and "y" in goal:
-            with contextlib.suppress(Exception):
-                self.navigation_manager.set_goal((float(goal["x"]), float(goal["y"])))
+        try:
+            lidar_frame: Any | None = None
+            camera_frame: Any | None = None
 
-    def run(self, num_cycles: int = 100) -> None:
-        """Run the control loop for a fixed number of cycles.
+            if self.time_sync is not None:
+                if self.config.use_ros2 and self.sensor_io is not None:
+                    with contextlib.suppress(Exception):
+                        lidar_frame = self.sensor_io.get_latest_lidar_frame()
+                    with contextlib.suppress(Exception):
+                        camera_frame = self.sensor_io.get_latest_camera_frame()
+                else:
+                    if self.lidar_io is not None:
+                        with contextlib.suppress(Exception):
+                            lidar_frame = self.lidar_io.get_latest_lidar_frame()
+                    if self.camera_io is not None:
+                        with contextlib.suppress(Exception):
+                            camera_frame = self.camera_io.get_latest_camera_frame()
 
-        In each cycle the orchestrator reads sensors, updates managers,
-        processes tasks, sends joint commands and verifies state
-        consistency. Timing is maintained using ``time.sleep`` to
-        approximate the desired cycle duration. Note that this
-        demonstration does not handle missed deadlines or jitter; it
-        simply sleeps for the remaining time.
-        """
-        for cycle in range(num_cycles):
-            try:
-                new_config = load_config()
-            except Exception:
-                new_config = None
+                if camera_frame is not None:
+                    with contextlib.suppress(Exception):
+                        self.time_sync.add_camera_frame(camera_frame)
 
-            if (
-                new_config is not None
-                and new_config.environment_profile != self._current_env_profile
-            ):
-                self.config = new_config
-                self._current_env_profile = new_config.environment_profile
-                self.environment_adapter = EnvironmentAdapter(self.config)
+                matched_camera = None
+                if lidar_frame is not None:
+                    with contextlib.suppress(Exception):
+                        match = self.time_sync.match(lidar_frame)
+                        matched_camera = match.camera_frame
+
+                if lidar_frame is not None:
+                    augmented_state["lidar_frame"] = lidar_frame
+                if matched_camera is not None:
+                    augmented_state["camera_frame"] = matched_camera
+                elif camera_frame is not None:
+                    augmented_state["camera_frame"] = camera_frame
+
+            fused = self.sensor_processor.fuse_sensors(augmented_state)
+        except Exception:
+            fused = self.sensor_processor.fuse_sensors(self.current_state)
+
+        for key, value in fused.items():
+            if key not in {"timestamp", "positions", "velocities", "torques"}:
+                self.current_state[key] = value
+
+    def _handle_incoming_commands(self) -> None:
+        """Consume one queued communication payload and translate it into work."""
+        try:
+            command = self.communication.receive_commands()
+        except Exception:
+            command = {}
+
+        if not isinstance(command, dict) or not command:
+            return
+
+        goal = command.get("add_goal")
+        if isinstance(goal, dict):
+            self.submit_goal(goal)
+
+        task_def = command.get("task")
+        if isinstance(task_def, dict):
+            task_id = task_def.get("id")
+            parameters = task_def.get("parameters", {})
+            if task_id and isinstance(parameters, dict):
                 with contextlib.suppress(Exception):
-                    self.environment_adapter.configure()
-                self.environment_overrides = self.environment_adapter.get_current_limits()
-                env_thermal = self.environment_overrides.get("thermal_limit_c")
-                if env_thermal is not None:
-                    self.thermal_manager.max_temp = float(env_thermal)
+                    self.submit_task(Task(id=str(task_id), parameters=parameters))
 
-                self.sensor_processor = SensorProcessor(self.config)
-                self.hazard_manager = HazardManager(self.config)
-                self.navigation_manager = NavigationManager(self.config)
-                self.locomotion_controller = LocomotionController(self.config)
-                self.fault_detector = FaultDetector(self.config)
-                self._apply_sensor_processor_overrides(self.environment_overrides)
-                self._apply_locomotion_override(self.environment_overrides)
+    def _update_faults_and_hazards(self) -> tuple[bool, bool, list[str], dict[str, Any]]:
+        """Update safety monitors and return stop/throttle decisions."""
+        with contextlib.suppress(Exception):
+            self.fault_detector.update(self.current_state, self._last_joint_commands)
 
-                self.mission_planner = MissionPlanner(
-                    self.config,
-                    self.battery_manager,
-                    self.thermal_manager,
-                    self.hazard_manager,
-                )
-                self.communication = CommunicationInterface(self.config)
-                with contextlib.suppress(Exception):
-                    self.communication.connect()
+        faults = self.fault_detector.get_faults() if self.fault_detector.has_fault() else []
 
-            try:
-                cmd = self.communication.receive_commands()
-            except Exception:
-                cmd = {}
-            if isinstance(cmd, dict) and cmd:
-                if "add_goal" in cmd:
-                    goal = cmd.get("add_goal")
-                    if isinstance(goal, dict):
-                        self.submit_goal(goal)
-                if "task" in cmd:
-                    tdef = cmd.get("task")
-                    if isinstance(tdef, dict):
-                        tid = tdef.get("id")
-                        params = tdef.get("parameters", {})
-                        if tid and isinstance(params, dict):
-                            with contextlib.suppress(Exception):
-                                self.submit_task(Task(id=tid, parameters=params))
+        signals: dict[str, Any] = {}
+        if "proximity" in self.current_state:
+            signals["proximity"] = self.current_state["proximity"]
+        if "pedestrian" in self.current_state:
+            signals["pedestrian"] = self.current_state["pedestrian"]
 
-            start = time.perf_counter()
+        hazards_in_state = self.current_state.get("hazards")
+        if isinstance(hazards_in_state, dict):
+            for hazard_key, hazard_value in hazards_in_state.items():
+                signals[str(hazard_key)] = hazard_value
 
-            with self.concurrency_manager.acquire("hardware"):
-                sensor_data = self.hardware.sync({})
-                self.current_state = self._normalise_state(sensor_data)
-                augmented_state = dict(self.current_state)
-                try:
-                    lidar_frame = None
-                    camera_frame = None
-                    if self.time_sync:
-                        if self.config.use_ros2 and self.sensor_io is not None:
-                            try:
-                                lidar_frame = self.sensor_io.get_latest_lidar_frame()
-                                camera_frame = self.sensor_io.get_latest_camera_frame()
-                            except Exception:
-                                lidar_frame = None
-                                camera_frame = None
-                        else:
-                            if self.lidar_io is not None:
-                                try:
-                                    lidar_frame = self.lidar_io.get_latest_lidar_frame()
-                                except Exception:
-                                    lidar_frame = None
-                            if self.camera_io is not None:
-                                try:
-                                    camera_frame = self.camera_io.get_latest_camera_frame()
-                                except Exception:
-                                    camera_frame = None
-                        if camera_frame is not None:
-                            with contextlib.suppress(Exception):
-                                self.time_sync.add_camera_frame(camera_frame)
-                        matched_camera = None
-                        if lidar_frame is not None:
-                            try:
-                                res = self.time_sync.match(lidar_frame)
-                                matched_camera = res.camera_frame
-                            except Exception:
-                                matched_camera = None
-                        if lidar_frame is not None:
-                            augmented_state["lidar_frame"] = lidar_frame
-                        if matched_camera is not None:
-                            augmented_state["camera_frame"] = matched_camera
-                        elif camera_frame is not None:
-                            augmented_state["camera_frame"] = camera_frame
-                    fused = self.sensor_processor.fuse_sensors(augmented_state)
-                except Exception:
-                    fused = self.sensor_processor.fuse_sensors(self.current_state)
-                for key, value in fused.items():
-                    if key not in self.current_state:
-                        self.current_state[key] = value
+        if faults:
+            signals["faults"] = list(faults)
 
-                with contextlib.suppress(Exception):
-                    self.fault_detector.update(self.current_state, self._last_joint_commands)
-                fault_list = (
-                    self.fault_detector.get_faults() if self.fault_detector.has_fault() else []
-                )
+        self.hazard_manager.update(signals)
+        hazards = self.hazard_manager.current_hazards()
+        self.current_state["hazard_flags"] = hazards
 
-                signals: dict[str, Any] = {}
-                if "proximity" in self.current_state:
-                    signals["proximity"] = self.current_state["proximity"]
-                hazards_dict = self.current_state.get("hazards")
-                if isinstance(hazards_dict, dict):
-                    for hazard_key, hazard_value in hazards_dict.items():
-                        signals[hazard_key] = hazard_value
-                if "pedestrian" in self.current_state:
-                    signals["pedestrian"] = self.current_state["pedestrian"]
-                if fault_list:
-                    signals["faults"] = list(fault_list)
-                self.hazard_manager.update(signals)
-                self.current_state["hazard_flags"] = self.hazard_manager.current_hazards()
+        hazard_risk = "none"
+        for info in hazards.values():
+            if not isinstance(info, dict):
+                hazard_risk = "high"
+                break
+            risk_level = str(info.get("risk_level", "high")).lower()
+            if risk_level == "high":
+                hazard_risk = "high"
+                break
+            if risk_level == "moderate" and hazard_risk != "high":
+                hazard_risk = "moderate"
 
-                hazard_risk = "none"
-                try:
-                    hazards = self.hazard_manager.current_hazards()
-                    for info in hazards.values():
-                        risk = None
-                        if isinstance(info, dict):
-                            risk = info.get("risk_level")
-                        if risk is None or str(risk).lower() == "high":
-                            hazard_risk = "high"
-                            break
-                        if str(risk).lower() == "moderate" and hazard_risk != "high":
-                            hazard_risk = "moderate"
-                except Exception:
-                    hazard_risk = "high"
-                hazard_stop = hazard_risk == "high"
-                hazard_throttle = hazard_risk == "moderate"
+        return hazard_risk == "high", hazard_risk == "moderate", list(faults), hazards
 
-                try:
-                    planned = self.mission_planner.plan_tasks(self.current_state)
-                except Exception:
-                    planned = []
-                for task in planned:
-                    self.submit_task(task)
+    def _update_planning(self) -> None:
+        """Advance mission planning, navigation, and locomotion state."""
+        try:
+            planned_tasks = self.mission_planner.plan_tasks(self.current_state)
+        except Exception:
+            planned_tasks = []
+        for task in planned_tasks:
+            self.submit_task(task)
 
-            _plan = self.navigation_manager.update(self.current_state)
-            navigation_report = self.navigation_manager.get_latest_report()
-            if navigation_report:
-                self.current_state["navigation"] = navigation_report
-                nav2_payload = navigation_report.get("nav2")
-                if isinstance(nav2_payload, dict):
-                    self.current_state["nav2_costmap"] = nav2_payload
-                map_summary = navigation_report.get("map")
-                if isinstance(map_summary, dict):
-                    self.current_state["map"] = map_summary
-                if isinstance(navigation_report.get("global_plan"), list):
-                    self.current_state["global_plan"] = navigation_report["global_plan"]
-                if isinstance(navigation_report.get("local_plan"), list):
-                    self.current_state["local_plan"] = navigation_report["local_plan"]
-            self.locomotion_controller.update_state(self.current_state)
-            desired_velocity = self.navigation_manager.get_latest_velocity_command()
-            locomotion_commands = self.locomotion_controller.compute_commands(desired_velocity)
-            if locomotion_commands:
-                self.current_state["locomotion_commands"] = locomotion_commands
+        self.navigation_manager.update(self.current_state)
+        navigation_report = self.navigation_manager.get_latest_report()
+        if isinstance(navigation_report, dict) and navigation_report:
+            self.current_state["navigation"] = navigation_report
+
+            nav2_payload = navigation_report.get("nav2")
+            if isinstance(nav2_payload, dict):
+                self.current_state["nav2_costmap"] = nav2_payload
+
+            map_summary = navigation_report.get("map")
+            if isinstance(map_summary, dict):
+                self.current_state["map"] = map_summary
+
+            global_plan = navigation_report.get("global_plan")
+            if isinstance(global_plan, list):
+                self.current_state["global_plan"] = global_plan
+
+            local_plan = navigation_report.get("local_plan")
+            if isinstance(local_plan, list):
+                self.current_state["local_plan"] = local_plan
+
+        self.locomotion_controller.update_state(self.current_state)
+        desired_velocity = self.navigation_manager.get_latest_velocity_command()
+        locomotion_commands = self.locomotion_controller.compute_commands(desired_velocity)
+        if locomotion_commands:
+            self.current_state["locomotion_commands"] = locomotion_commands
+            if self._has_nonzero_velocity_command(desired_velocity):
                 self.submit_task(
                     Task(
                         id="follow_navigation_velocity",
@@ -482,110 +455,232 @@ class RobotOrchestrator:
                     )
                 )
 
-            timestamp = self.current_state.get("timestamp", cycle * self.cycle_time)
-            battery_state = BatteryState(
-                voltage=50.0 - 0.01 * cycle,
-                current=10.0,
-                temperature=25.0,
-                soc=max(1.0 - 0.001 * cycle, 0.0),
-                health=1.0,
-                timestamp=timestamp,
-            )
-            self.battery_manager.update(battery_state)
-            temp_data = {
-                joint: 30.0 + 0.1 * cycle for joint in self.current_state.get("positions", {})
-            }
-            self.thermal_manager.update(temp_data)
+    def _update_power_and_thermal(self, cycle: int) -> None:
+        """Refresh battery and temperature models for the current cycle."""
+        timestamp = self.current_state.get("timestamp", cycle * self.cycle_time)
+        battery_state = BatteryState(
+            voltage=50.0 - 0.01 * cycle,
+            current=10.0,
+            temperature=25.0,
+            soc=max(1.0 - 0.001 * cycle, 0.0),
+            health=1.0,
+            timestamp=timestamp,
+        )
+        self.battery_manager.update(battery_state)
 
+        temps = {
+            joint_id: 30.0 + 0.1 * cycle
+            for joint_id in self.current_state.get("positions", {})
+        }
+        self.thermal_manager.update(temps)
+
+    def _collect_joint_commands(
+        self,
+        cycle: int,
+        hazard_stop: bool,
+        hazard_throttle: bool,
+    ) -> dict[str, JointCommand]:
+        """Map queued tasks into bounded joint commands for this cycle."""
+        desired_joint_commands: dict[str, JointCommand] = {}
+        if hazard_stop:
+            print(f"[Cycle {cycle}] Emergency stop: high-risk hazard detected; skipping tasks")
+            return desired_joint_commands
+
+        with self.concurrency_manager.acquire("tasks"):
+            tasks_to_process = self.pending_tasks
+            self.pending_tasks = []
+
+        for task in tasks_to_process:
+            try:
+                instructions = self.task_mapper.map_task(task, self.current_state)
+            except (KeyError, TypeError, ValueError) as exc:
+                self._logger.debug(
+                    "Skipping task %r because mapping failed: %s",
+                    getattr(task, "id", ""),
+                    exc,
+                )
+                continue
+
+            energy_required = 0.0
+            with contextlib.suppress(Exception):
+                energy_required = self.battery_manager.estimate_task_energy(
+                    instructions,
+                    self.current_state,
+                )
+            if self.battery_manager.should_defer_task(energy_required):
+                print(
+                    f"[Cycle {cycle}] Task {getattr(task, 'id', '')!r} deferred due to low energy budget"
+                )
+                continue
+
+            thermal_load = 0.0
+            with contextlib.suppress(Exception):
+                thermal_load = self.thermal_manager.estimate_task_thermal_load(
+                    instructions,
+                    self.current_state,
+                )
+            throttle = self.thermal_manager.should_throttle(thermal_load) or hazard_throttle
+
+            for instruction in instructions:
+                desired_joint_commands[instruction.joint_id] = self._instruction_to_joint_command(
+                    instruction,
+                    throttle=throttle,
+                )
+
+        return desired_joint_commands
+
+    def _instruction_to_joint_command(
+        self,
+        instruction: JointInstruction,
+        *,
+        throttle: bool,
+    ) -> JointCommand:
+        """Convert a task-mapping instruction into a bounded joint command."""
+        command_dict = instruction.command.copy() if isinstance(instruction.command, dict) else {}
+        if throttle:
+            velocity = command_dict.get("velocity")
+            if velocity is not None:
+                with contextlib.suppress(Exception):
+                    command_dict["velocity"] = 0.5 * float(velocity)
+            torque = command_dict.get("torque")
+            if torque is not None:
+                with contextlib.suppress(Exception):
+                    command_dict["torque"] = 0.5 * float(torque)
+
+        return JointCommand(
+            position=command_dict.get("position"),
+            velocity=command_dict.get("velocity"),
+            torque=command_dict.get("torque"),
+        )
+
+    def _apply_joint_commands(self, commands: dict[str, JointCommand]) -> None:
+        """Synchronise desired joint commands and refresh the cached robot state."""
+        if not commands:
+            self._last_joint_commands = {}
+            return
+
+        preserved_state = {
+            key: self.current_state.get(key)
+            for key in _PRESERVED_STATE_KEYS
+            if key in self.current_state
+        }
+        joint_state_only = {
+            joint_id: {
+                "position": self.current_state.get("positions", {}).get(joint_id),
+                "velocity": self.current_state.get("velocities", {}).get(joint_id),
+            }
+            for joint_id in commands
+        }
+
+        with self.concurrency_manager.acquire("hardware"):
+            sensor_data = self.joint_sync.synchronize(commands, joint_state_only)
+
+        self.current_state = self._normalise_state(sensor_data)
+        self.current_state.update(preserved_state)
+        self._last_joint_commands = commands.copy()
+
+    def _publish_runtime_outputs(
+        self,
+        cycle: int,
+        start_time: float,
+        consistent: bool,
+        faults: list[str],
+        hazards: dict[str, Any],
+    ) -> None:
+        """Emit runtime metrics, health events, and telemetry for the cycle."""
+        try:
+            metrics = build_runtime_metrics(
+                cycle=cycle,
+                loop_duration_s=time.perf_counter() - start_time,
+                state=self.current_state,
+                telemetry_count=len(getattr(self.communication, "_telemetry_log", [])),
+                fault_count=len(faults),
+                hazard_count=len(hazards),
+            )
+            events = build_health_events(
+                cycle=cycle,
+                timestamp=self.current_state.get("timestamp"),
+                battery_ok=self.battery_manager.is_ok(),
+                thermal_ok=self.thermal_manager.is_within_limits(),
+                consistency_ok=consistent,
+                faults=faults,
+                hazards=hazards,
+            )
+            telemetry = {
+                "timestamp": self.current_state.get("timestamp"),
+                "battery_soc": (
+                    getattr(self.battery_manager.state, "soc", None)
+                    if self.battery_manager.state
+                    else None
+                ),
+                "battery_voltage": (
+                    getattr(self.battery_manager.state, "voltage", None)
+                    if self.battery_manager.state
+                    else None
+                ),
+                "battery_current": (
+                    getattr(self.battery_manager.state, "current", None)
+                    if self.battery_manager.state
+                    else None
+                ),
+                "thermal_max": (
+                    max(self.thermal_manager.current_temps.values())
+                    if self.thermal_manager.current_temps
+                    else None
+                ),
+                "hazards": hazards,
+                "faults": faults,
+                "runtime_metrics": metrics,
+                "health_events": [event.as_dict() for event in events],
+            }
+            self.communication.send_telemetry(telemetry)
+            self.runtime_metrics_history.append(metrics)
+            self.health_events.extend(event.as_dict() for event in events)
+            self.structured_logs.append(
+                build_structured_log(
+                    cycle=cycle,
+                    state=self.current_state,
+                    metrics=metrics,
+                    events=events,
+                )
+            )
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self._logger.debug("Telemetry dispatch failed for cycle %s: %s", cycle, exc)
+
+    def submit_task(self, task: Task) -> None:
+        """Queue a high-level task for execution in the next control cycle."""
+        with self.concurrency_manager.acquire("tasks"):
+            self.pending_tasks.append(task)
+
+    def submit_goal(self, goal: dict[str, Any]) -> None:
+        """Submit a high-level mission goal and, when possible, a navigation target."""
+        self.mission_planner.add_goal(goal)
+        if isinstance(goal, dict) and "x" in goal and "y" in goal:
+            with contextlib.suppress(Exception):
+                self.navigation_manager.set_goal((float(goal["x"]), float(goal["y"])))
+
+    def run(self, num_cycles: int = 100) -> None:
+        """Run the deterministic control loop for ``num_cycles`` iterations."""
+        for _ in range(num_cycles):
+            cycle = self._cycle_index
+            self._cycle_index += 1
+
+            self._reconfigure_if_needed()
+            self._handle_incoming_commands()
+            start = time.perf_counter()
+
+            self._read_augmented_state()
+            hazard_stop, hazard_throttle, faults, hazards = self._update_faults_and_hazards()
+            self._update_planning()
+            self._update_power_and_thermal(cycle)
             self.execution_stack.step()
 
-            desired_joint_commands: dict[str, JointCommand] = {}
-            if hazard_stop:
-                print(f"[Cycle {cycle}] Emergency stop: high-risk hazard detected; skipping tasks")
-            else:
-                with self.concurrency_manager.acquire("tasks"):
-                    tasks_to_process = self.pending_tasks
-                    self.pending_tasks = []
-                for task in tasks_to_process:
-                    instructions: list[JointInstruction]
-                    try:
-                        instructions = self.task_mapper.map_task(task, self.current_state)
-                    except (KeyError, TypeError, ValueError) as exc:
-                        self._logger.debug(
-                            "Skipping task '%s' because mapping failed: %s",
-                            getattr(task, "id", ""),
-                            exc,
-                        )
-                        continue
-                    try:
-                        energy_req = self.battery_manager.estimate_task_energy(
-                            instructions,
-                            self.current_state,
-                        )
-                    except Exception:
-                        energy_req = 0.0
-                    if self.battery_manager.should_defer_task(energy_req):
-                        print(
-                            f"[Cycle {cycle}] Task '{getattr(task, 'id', '')}' deferred due to low energy budget"
-                        )
-                        continue
-                    try:
-                        thermal_load = self.thermal_manager.estimate_task_thermal_load(
-                            instructions,
-                            self.current_state,
-                        )
-                    except Exception:
-                        thermal_load = 0.0
-                    throttle_due_to_thermal = self.thermal_manager.should_throttle(thermal_load)
-                    throttle = throttle_due_to_thermal or hazard_throttle
-                    for inst in instructions:
-                        cmd_dict = inst.command.copy() if isinstance(inst.command, dict) else {}
-                        if throttle:
-                            if cmd_dict.get("velocity") is not None:
-                                with contextlib.suppress(Exception):
-                                    cmd_dict["velocity"] = 0.5 * float(cmd_dict["velocity"])
-                            if cmd_dict.get("torque") is not None:
-                                with contextlib.suppress(Exception):
-                                    cmd_dict["torque"] = 0.5 * float(cmd_dict["torque"])
-                        desired_joint_commands[inst.joint_id] = JointCommand(
-                            position=cmd_dict.get("position"),
-                            velocity=cmd_dict.get("velocity"),
-                            torque=cmd_dict.get("torque"),
-                        )
-
-            if desired_joint_commands:
-                preserved_state = {
-                    key: self.current_state.get(key)
-                    for key in (
-                        "fusion",
-                        "hazards",
-                        "proximity",
-                        "pedestrian",
-                        "hazard_flags",
-                        "navigation",
-                        "map",
-                        "nav2_costmap",
-                        "global_plan",
-                        "local_plan",
-                        "locomotion_commands",
-                    )
-                    if key in self.current_state
-                }
-                joint_state_only = {
-                    jid: {
-                        "position": self.current_state.get("positions", {}).get(jid),
-                        "velocity": self.current_state.get("velocities", {}).get(jid),
-                    }
-                    for jid in desired_joint_commands
-                }
-                with self.concurrency_manager.acquire("hardware"):
-                    sensor_data = self.joint_sync.synchronize(
-                        desired_joint_commands,
-                        joint_state_only,
-                    )
-                self.current_state = self._normalise_state(sensor_data)
-                self.current_state.update(preserved_state)
-                self._last_joint_commands = desired_joint_commands.copy()
+            desired_joint_commands = self._collect_joint_commands(
+                cycle,
+                hazard_stop,
+                hazard_throttle,
+            )
+            self._apply_joint_commands(desired_joint_commands)
 
             consistent = self.consistency_verifier.verify(self.current_state)
             if not consistent:
@@ -594,74 +689,25 @@ class RobotOrchestrator:
                 print(f"[Cycle {cycle}] Warning: battery low or temperature out of range")
             if not self.thermal_manager.is_within_limits():
                 print(f"[Cycle {cycle}] Warning: thermal limit exceeded; cooling recommended")
-                duties = self.thermal_manager.recommended_cooling()
-                print(f"[Cycle {cycle}] Cooling duties: {duties}")
+                print(f"[Cycle {cycle}] Cooling duties: {self.thermal_manager.recommended_cooling()}")
 
-            try:
-                faults = self.fault_detector.get_faults() if self.fault_detector.has_fault() else []
-                hazards = self.hazard_manager.current_hazards()
-                metrics = build_runtime_metrics(
-                    cycle=cycle,
-                    loop_duration_s=time.perf_counter() - start,
-                    state=self.current_state,
-                    telemetry_count=len(getattr(self.communication, "_telemetry_log", [])),
-                    fault_count=len(faults),
-                    hazard_count=len(hazards),
-                )
-                events = build_health_events(
-                    cycle=cycle,
-                    timestamp=self.current_state.get("timestamp"),
-                    battery_ok=self.battery_manager.is_ok(),
-                    thermal_ok=self.thermal_manager.is_within_limits(),
-                    consistency_ok=consistent,
-                    faults=faults,
-                    hazards=hazards,
-                )
-                telemetry = {
-                    "timestamp": self.current_state.get("timestamp"),
-                    "battery_soc": (
-                        getattr(self.battery_manager.state, "soc", None)
-                        if self.battery_manager.state
-                        else None
-                    ),
-                    "battery_voltage": (
-                        getattr(self.battery_manager.state, "voltage", None)
-                        if self.battery_manager.state
-                        else None
-                    ),
-                    "battery_current": (
-                        getattr(self.battery_manager.state, "current", None)
-                        if self.battery_manager.state
-                        else None
-                    ),
-                    "thermal_max": (
-                        max(self.thermal_manager.current_temps.values())
-                        if self.thermal_manager.current_temps
-                        else None
-                    ),
-                    "hazards": hazards,
-                    "faults": faults,
-                    "runtime_metrics": metrics,
-                    "health_events": [event.as_dict() for event in events],
-                }
-                self.communication.send_telemetry(telemetry)
-                self.runtime_metrics_history.append(metrics)
-                self.health_events.extend(event.as_dict() for event in events)
-                self.structured_logs.append(
-                    build_structured_log(
-                        cycle=cycle,
-                        state=self.current_state,
-                        metrics=metrics,
-                        events=events,
-                    )
-                )
-            except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
-                self._logger.debug("Telemetry dispatch failed for cycle %s: %s", cycle, exc)
+            self._publish_runtime_outputs(cycle, start, consistent, faults, hazards)
 
             elapsed = time.perf_counter() - start
             remaining = self.cycle_time - elapsed
             if remaining > 0:
                 time.sleep(remaining)
+
+    @staticmethod
+    def _has_nonzero_velocity_command(command: Any) -> bool:
+        """Return ``True`` when a navigation velocity payload requests motion."""
+        if not isinstance(command, (tuple, list)):
+            return False
+        for value in command:
+            with contextlib.suppress(TypeError, ValueError):
+                if abs(float(value)) > 1e-9:
+                    return True
+        return False
 
 
 if __name__ == "__main__":
@@ -674,6 +720,9 @@ if __name__ == "__main__":
         max_torque=1.5,
     )
     orchestrator.submit_task(
-        Task(id="move_joints", parameters={"joint_positions": {"joint1": 0.5, "joint2": -0.3}})
+        Task(
+            id="move_joints",
+            parameters={"joint_positions": {"joint1": 0.5, "joint2": -0.3}},
+        )
     )
     orchestrator.run(num_cycles=20)
