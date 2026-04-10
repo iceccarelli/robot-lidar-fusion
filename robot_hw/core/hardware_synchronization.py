@@ -4,13 +4,13 @@ Hardware Synchronisation Module
 
 This module defines the :class:`HardwareSynchronizer`, responsible for
 coordinating actuator commands and sensor readings in a deterministic
-control loop.  It provides a single entry point for applying a coherent
+control loop. It provides a single entry point for applying a coherent
 batch of actuator commands and then retrieving a consistent sensor
 snapshot that reflects those commands.
 
 The wrapper is intentionally lightweight so it can sit above many
-possible hardware backends.  A small in-memory mock backend is included
-for simulation and tests.  That mock is designed to integrate cleanly
+possible hardware backends. A small in-memory mock backend is included
+for simulation and tests. That mock is designed to integrate cleanly
 with the repository's joint synchroniser, fault detector and
 orchestrator.
 
@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import contextlib
 import os
-import random
 from dataclasses import dataclass
+from secrets import SystemRandom
 from typing import Any
 
 
@@ -41,14 +41,14 @@ class ActuatorCommand:
     id : str
         Unique actuator identifier, such as a joint name.
     position : float | None
-        Target position in radians or metres.  ``None`` leaves the
+        Target position in radians or metres. ``None`` leaves the
         existing target unchanged.
     velocity : float | None
-        Target velocity in units per second.  ``None`` leaves the
+        Target velocity in units per second. ``None`` leaves the
         existing velocity unchanged unless a new position target implies
         a derived velocity.
     torque : float | None
-        Target torque or force.  ``None`` leaves the existing torque
+        Target torque or force. ``None`` leaves the existing torque
         unchanged.
     """
 
@@ -62,10 +62,10 @@ class HardwareSynchronizer:
     """Synchronise actuator commands and sensor readings.
 
     The synchroniser delegates low-level I/O to the supplied hardware
-    interface.  Callers interact with one stable method,
-    :meth:`sync`, which applies a command batch and then reads a sensor
-    snapshot.  This preserves causal ordering and keeps higher-level
-    modules independent from backend-specific details.
+    interface. Callers interact with one stable method, :meth:`sync`,
+    which applies a command batch and then reads a sensor snapshot.
+    This preserves causal ordering and keeps higher-level modules
+    independent from backend-specific details.
     """
 
     def __init__(self, hardware_interface: Any) -> None:
@@ -83,19 +83,17 @@ class HardwareSynchronizer:
     class MockHardwareInterface:
         """Simple in-memory backend for tests and simulation.
 
-        The previous mock updated joint velocities but left joint
-        positions unchanged for velocity-only commands.  That behaviour
-        caused the repository's fault detector to infer false
-        ``sensor_stuck:*`` faults during navigation-driven simulation.
-        This implementation fixes that integration defect by evolving
-        joint position consistently from commanded velocity over a fixed
-        control interval.
+        The mock updates joint velocities and evolves joint position
+        consistently for velocity-driven commands so the resulting sensor
+        snapshots remain coherent for the repository's simulation,
+        navigation, and fault-detection flows.
         """
 
         def __init__(self, cycle_time_s: float = 0.01) -> None:
             self.states: dict[str, dict[str, float]] = {}
             self._timestamp: float = 0.0
             self._cycle_time_s: float = float(cycle_time_s) if cycle_time_s > 0.0 else 0.01
+            self._rng = SystemRandom()
 
         @staticmethod
         def _as_float(value: Any, default: float = 0.0) -> float:
@@ -117,7 +115,7 @@ class HardwareSynchronizer:
 
             Position-only commands update the joint position directly and
             derive a velocity estimate from the displacement over the
-            mock cycle time.  Velocity-only commands advance the stored
+            mock cycle time. Velocity-only commands advance the stored
             position by ``velocity * cycle_time`` so the simulated sensor
             state evolves in a way that the fault detector recognises as
             healthy motion.
@@ -162,46 +160,37 @@ class HardwareSynchronizer:
             imposing requirements on production backends.
             """
             env = os.getenv("ENVIRONMENT_PROFILE", "GENERAL").strip().upper()
+            rng = self._rng
 
             if env == "MINING":
-                snapshot["gas"] = random.uniform(0.0, 3.0)  # nosec B311
-                snapshot["radiation"] = random.uniform(0.0, 2.0)  # nosec B311
-                snapshot["high_voltage"] = random.uniform(0.0, 10.0)  # nosec B311
-                snapshot["train"] = (
-                    random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
-                )  # nosec B311
-                snapshot["pedestrian"] = bool(random.random() < 0.05)  # nosec B311
+                snapshot["gas"] = rng.uniform(0.0, 3.0)
+                snapshot["radiation"] = rng.uniform(0.0, 2.0)
+                snapshot["high_voltage"] = rng.uniform(0.0, 10.0)
+                snapshot["train"] = rng.uniform(0.0, 3.0) if rng.random() < 0.1 else 5.0
+                snapshot["pedestrian"] = rng.random() < 0.05
             elif env == "UNDERWATER":
-                snapshot["proximity"] = random.uniform(0.0, 2.0)  # nosec B311
-                snapshot["gas"] = (
-                    random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
-                )  # nosec B311
-                snapshot["radiation"] = (
-                    random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
-                )  # nosec B311
+                snapshot["proximity"] = rng.uniform(0.0, 2.0)
+                snapshot["gas"] = rng.uniform(0.0, 0.5) if rng.random() < 0.05 else 0.0
+                snapshot["radiation"] = rng.uniform(0.0, 1.0) if rng.random() < 0.02 else 0.0
                 snapshot["pedestrian"] = False
             elif env == "SPACE":
-                snapshot["radiation"] = random.uniform(0.0, 3.0)  # nosec B311
-                snapshot["high_voltage"] = random.uniform(0.0, 20.0)  # nosec B311
-                snapshot["proximity"] = random.uniform(0.0, 10.0)  # nosec B311
+                snapshot["radiation"] = rng.uniform(0.0, 3.0)
+                snapshot["high_voltage"] = rng.uniform(0.0, 20.0)
+                snapshot["proximity"] = rng.uniform(0.0, 10.0)
                 snapshot["pedestrian"] = False
             elif env == "FORESTRY":
-                snapshot["proximity"] = random.uniform(0.0, 1.5)  # nosec B311
-                snapshot["pedestrian"] = bool(random.random() < 0.2)  # nosec B311
-                snapshot["human"] = (
-                    random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
-                )  # nosec B311
+                snapshot["proximity"] = rng.uniform(0.0, 1.5)
+                snapshot["pedestrian"] = rng.random() < 0.2
+                snapshot["human"] = rng.uniform(0.0, 2.0) if rng.random() < 0.1 else 5.0
             else:
-                snapshot["proximity"] = (
-                    random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
-                )  # nosec B311
-                snapshot["pedestrian"] = bool(random.random() < 0.01)  # nosec B311
+                snapshot["proximity"] = rng.uniform(0.0, 5.0) if rng.random() < 0.05 else 5.0
+                snapshot["pedestrian"] = rng.random() < 0.01
 
         def read_sensors(self) -> dict[str, Any]:
             """Return a consistent sensor snapshot for the current state.
 
             The timestamp advances once per sensor read using the fixed
-            mock cycle time.  Each actuator entry is returned as a fresh
+            mock cycle time. Each actuator entry is returned as a fresh
             shallow copy containing ``position``, ``velocity`` and
             ``torque``.
             """
@@ -232,7 +221,7 @@ class HardwareSynchronizer:
         Returns
         -------
         dict[str, Any]
-            Raw sensor snapshot produced by the backend.  The snapshot is
+            Raw sensor snapshot produced by the backend. The snapshot is
             returned as a plain dictionary so upstream callers can safely
             normalise or copy it.
         """
