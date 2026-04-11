@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "robot-lidar-fusion"
-version = "0.1.0"
+version = "0.2.1"
 description = "The open-source control stack for autonomous robots with LiDAR-camera sensor fusion."
 readme = "README.md"
 license = {text = "Apache-2.0"}
