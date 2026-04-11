@@ -138,7 +138,9 @@ class ThermalManager:
     # ------------------------------------------------------------------
     # Advanced thermal estimation and throttling helpers
     # ------------------------------------------------------------------
-    def estimate_task_thermal_load(self, instructions: list[Any], current_state: dict[str, Any] | None = None) -> float:
+    def estimate_task_thermal_load(
+        self, instructions: list[Any], current_state: dict[str, Any] | None = None
+    ) -> float:
         """Estimate the thermal load of executing a set of joint instructions.
 
         A simplified thermal model is used: the predicted temperature
@@ -273,7 +275,9 @@ class ThermalManager:
             preds[comp] = t + thermal_load
         return preds
 
-    def register_cooling_callback(self, callback: Callable[[dict[str, float]], None]) -> None:
+    def register_cooling_callback(
+        self, callback: Callable[[dict[str, float]], None]
+    ) -> None:
         """Register a callback to be invoked when cooling duties are computed.
 
         Callbacks should be non‑blocking; they will be invoked with the

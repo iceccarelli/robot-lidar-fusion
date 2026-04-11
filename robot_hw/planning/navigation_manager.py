@@ -47,7 +47,7 @@ class NavigationManager:
         self._current_plan: list[tuple[float, float]] = []
         self._goal: tuple[float, float] | None = None
         # Planning algorithm selection (e.g. A_STAR, RRT)
-        self._algorithm = getattr(config, 'path_planning_algorithm', 'A_STAR').upper()
+        self._algorithm = getattr(config, "path_planning_algorithm", "A_STAR").upper()
         # Logger for diagnostics
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -109,10 +109,16 @@ class NavigationManager:
         goal = self._goal
         # Compute a new path using the configured algorithm
         plan: list[tuple[float, float]]
-        plan = self._compute_rrt(current, goal) if self._algorithm == "RRT" else self._compute_a_star(current, goal)
+        plan = (
+            self._compute_rrt(current, goal)
+            if self._algorithm == "RRT"
+            else self._compute_a_star(current, goal)
+        )
         # Incorporate simple hazard avoidance by shifting path if hazards present
         try:
-            hazard_flags = state.get("hazard_flags", {}) if isinstance(state, dict) else {}
+            hazard_flags = (
+                state.get("hazard_flags", {}) if isinstance(state, dict) else {}
+            )
             # If any dynamic obstacle hazard is active, offset the path in y
             dynamic_keys = {"train", "car", "human", "pedestrian"}
             if any(h in hazard_flags for h in dynamic_keys):
@@ -125,7 +131,9 @@ class NavigationManager:
     # ------------------------------------------------------------------
     # Path planning algorithms (simplified for demonstration)
     # ------------------------------------------------------------------
-    def _compute_a_star(self, start: tuple[float, float], goal: tuple[float, float]) -> list[tuple[float, float]]:
+    def _compute_a_star(
+        self, start: tuple[float, float], goal: tuple[float, float]
+    ) -> list[tuple[float, float]]:
         """Compute a simple straight‑line path with an intermediate waypoint.
 
         A placeholder for a grid‑based A* algorithm.  Returns a list of
@@ -139,7 +147,9 @@ class NavigationManager:
         my = (sy + gy) / 2.0
         return [start, (mx, my), goal]
 
-    def _compute_rrt(self, start: tuple[float, float], goal: tuple[float, float]) -> list[tuple[float, float]]:
+    def _compute_rrt(
+        self, start: tuple[float, float], goal: tuple[float, float]
+    ) -> list[tuple[float, float]]:
         """Compute a randomised path using a rudimentary RRT‐like method.
 
         This demonstration generates random intermediate waypoints between
@@ -149,9 +159,11 @@ class NavigationManager:
         """
         sx, sy = start
         gx, gy = goal
+
         # Generate two random intermediate waypoints
         def rand_offset(a: float, b: float) -> float:
             return random.uniform(min(a, b), max(a, b))
+
         p1 = (rand_offset(sx, gx), rand_offset(sy, gy))
         p2 = (rand_offset(sx, gx), rand_offset(sy, gy))
         return [start, p1, p2, goal]

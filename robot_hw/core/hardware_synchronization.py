@@ -52,6 +52,7 @@ class ActuatorCommand:
     torque : float | None
         Target torque or force; None to leave unchanged.
     """
+
     id: str
     position: float | None = None
     velocity: float | None = None
@@ -121,7 +122,9 @@ class HardwareSynchronizer:
 
         def apply_commands(self, commands: dict[str, ActuatorCommand]) -> None:
             for aid, cmd in commands.items():
-                state = self.states.setdefault(aid, {"position": 0.0, "velocity": 0.0, "torque": 0.0})
+                state = self.states.setdefault(
+                    aid, {"position": 0.0, "velocity": 0.0, "torque": 0.0}
+                )
                 # Update only fields that are provided
                 if cmd.position is not None:
                     state["position"] = float(cmd.position)
@@ -148,12 +151,15 @@ class HardwareSynchronizer:
             """
             # Increment the internal timestamp to simulate elapsed time
             self._timestamp += 0.01
-            snapshot: dict[str, Any] = {aid: state.copy() for aid, state in self.states.items()}
+            snapshot: dict[str, Any] = {
+                aid: state.copy() for aid, state in self.states.items()
+            }
             snapshot["timestamp"] = self._timestamp
             # Inject synthetic hazard signals to emulate environment sensors
             try:
                 import os
                 import random
+
                 env = os.getenv("ENVIRONMENT_PROFILE", "GENERAL").strip().upper()
                 # Define hazard injection per environment
                 if env == "MINING":
@@ -162,14 +168,20 @@ class HardwareSynchronizer:
                     snapshot["radiation"] = random.uniform(0.0, 2.0)
                     snapshot["high_voltage"] = random.uniform(0.0, 10.0)
                     # Occasional trains or pedestrians in tunnels
-                    snapshot["train"] = random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
+                    snapshot["train"] = (
+                        random.uniform(0.0, 3.0) if random.random() < 0.1 else 5.0
+                    )
                     snapshot["pedestrian"] = bool(random.random() < 0.05)
                 elif env == "UNDERWATER":
                     # Obstacles within a few metres detected by sonar
                     snapshot["proximity"] = random.uniform(0.0, 2.0)
                     # Rare gas leaks or radiation underwater
-                    snapshot["gas"] = random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
-                    snapshot["radiation"] = random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                    snapshot["gas"] = (
+                        random.uniform(0.0, 0.5) if random.random() < 0.05 else 0.0
+                    )
+                    snapshot["radiation"] = (
+                        random.uniform(0.0, 1.0) if random.random() < 0.02 else 0.0
+                    )
                     snapshot["pedestrian"] = False
                 elif env == "SPACE":
                     # High radiation and electrical hazards in space operations
@@ -183,10 +195,14 @@ class HardwareSynchronizer:
                     snapshot["proximity"] = random.uniform(0.0, 1.5)
                     snapshot["pedestrian"] = bool(random.random() < 0.2)
                     # Occasionally detect a human or animal close by
-                    snapshot["human"] = random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
+                    snapshot["human"] = (
+                        random.uniform(0.0, 2.0) if random.random() < 0.1 else 5.0
+                    )
                 else:
                     # Generic environment: occasional obstacles but mostly clear
-                    snapshot["proximity"] = random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                    snapshot["proximity"] = (
+                        random.uniform(0.0, 5.0) if random.random() < 0.05 else 5.0
+                    )
                     snapshot["pedestrian"] = bool(random.random() < 0.01)
             except Exception:
                 # If hazard injection fails, proceed with the basic snapshot

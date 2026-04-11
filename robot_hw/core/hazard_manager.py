@@ -82,12 +82,14 @@ class HazardManager:
         self._hazards.clear()
         if not isinstance(signals, dict):
             return
+
         # Helper to retrieve threshold by index with fallback
         def _get_threshold(idx: int, default: float = 1.0) -> float:
             try:
                 return float(self._config.safety_thresholds[idx])
             except Exception:
                 return default
+
         # Proximity hazard
         prox = signals.get("proximity")
         if prox is not None:
@@ -97,7 +99,7 @@ class HazardManager:
                     self._hazards["proximity"] = {
                         "value": distance,
                         "threshold": self._config.min_safety_margin,
-                        "message": f"Object within {distance:.2f} m (min {self._config.min_safety_margin} m)"
+                        "message": f"Object within {distance:.2f} m (min {self._config.min_safety_margin} m)",
                     }
             except Exception:
                 pass
@@ -117,10 +119,14 @@ class HazardManager:
                 self._hazards[name] = {
                     "value": level,
                     "threshold": threshold,
-                    "message": f"{name.replace('_', ' ').title()} level {level:.2f} exceeds {threshold:.2f}"
+                    "message": f"{name.replace('_', ' ').title()} level {level:.2f} exceeds {threshold:.2f}",
                 }
         # Dynamic obstacle hazards (distances)
-        dynamic = {"train": signals.get("train"), "car": signals.get("car"), "human": signals.get("human")}
+        dynamic = {
+            "train": signals.get("train"),
+            "car": signals.get("car"),
+            "human": signals.get("human"),
+        }
         for name, val in dynamic.items():
             if val is None:
                 continue
@@ -132,7 +138,7 @@ class HazardManager:
                 self._hazards[name] = {
                     "value": dist,
                     "threshold": self._config.min_safety_margin,
-                    "message": f"{name.title()} within {dist:.2f} m"
+                    "message": f"{name.title()} within {dist:.2f} m",
                 }
         # Pedestrian flag hazard
         ped = signals.get("pedestrian")
@@ -140,7 +146,7 @@ class HazardManager:
             self._hazards["pedestrian"] = {
                 "value": True,
                 "threshold": True,
-                "message": "Pedestrian detected in path"
+                "message": "Pedestrian detected in path",
             }
 
         # Integrate fault flags as hazards.  The ``faults`` key may contain
@@ -159,7 +165,7 @@ class HazardManager:
                 self._hazards[f"fault:{fault_name}"] = {
                     "value": True,
                     "threshold": True,
-                    "message": f"Fault detected: {fault_name}"
+                    "message": f"Fault detected: {fault_name}",
                 }
 
     def is_safe(self) -> bool:
@@ -263,12 +269,14 @@ class HazardManager:
         self._hazards = {}
         if not isinstance(signals, dict):
             return
+
         # Helper to get numeric thresholds from config
         def _get_threshold(idx: int, default: float = 1.0) -> float:
             try:
                 return float(self._config.safety_thresholds[idx])
             except Exception:
                 return default
+
         # Proximity
         prox = signals.get("proximity")
         if prox is not None:
@@ -288,7 +296,7 @@ class HazardManager:
                         "threshold": self._config.min_safety_margin,
                         "severity": sev,
                         "risk_level": risk,
-                        "message": f"Object within {dist:.2f} m (min {self._config.min_safety_margin} m)"
+                        "message": f"Object within {dist:.2f} m (min {self._config.min_safety_margin} m)",
                     }
             except Exception as exc:
                 self._logger.debug("Error processing proximity hazard: %s", exc)
@@ -316,7 +324,7 @@ class HazardManager:
                     "threshold": thr,
                     "severity": sev,
                     "risk_level": risk,
-                    "message": f"{hname.replace('_', ' ').title()} level {level:.2f} exceeds {thr:.2f} (severity {sev:.2f})"
+                    "message": f"{hname.replace('_', ' ').title()} level {level:.2f} exceeds {thr:.2f} (severity {sev:.2f})",
                 }
         # Dynamic obstacles
         for oname in ["train", "car", "human"]:
@@ -341,7 +349,7 @@ class HazardManager:
                     "threshold": self._config.min_safety_margin,
                     "severity": sev,
                     "risk_level": risk,
-                    "message": f"{oname.title()} within {dist:.2f} m"
+                    "message": f"{oname.title()} within {dist:.2f} m",
                 }
         # Pedestrian
         if signals.get("pedestrian"):
@@ -350,7 +358,7 @@ class HazardManager:
                 "threshold": True,
                 "severity": 2.0,
                 "risk_level": "high",
-                "message": "Pedestrian detected in path"
+                "message": "Pedestrian detected in path",
             }
         # Faults
         faults = signals.get("faults")
@@ -367,7 +375,7 @@ class HazardManager:
                     "threshold": True,
                     "severity": 2.0,
                     "risk_level": "high",
-                    "message": f"Fault detected: {fname}"
+                    "message": f"Fault detected: {fname}",
                 }
         # Update exposure counts and annotate hazards
         current_keys = set(self._hazards.keys())

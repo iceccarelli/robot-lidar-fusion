@@ -68,16 +68,18 @@ class SensorProcessor:
         self._prev_lin_vel: tuple[float, float, float] | None = None
         self._prev_timestamp: float | None = None
         # Instantiate a predictive controller if available
-        self._predictor = PredictiveController(config) if PredictiveController is not None else None
+        self._predictor = (
+            PredictiveController(config) if PredictiveController is not None else None
+        )
         # Configure a module‑level logger
         self._logger = logging.getLogger(self.__class__.__name__)
         # Standard deviation of Gaussian noise applied to orientation and velocity
         try:
-            self._noise_std = float(getattr(config, 'sensor_noise_std', 0.0))
+            self._noise_std = float(getattr(config, "sensor_noise_std", 0.0))
         except Exception:
             self._noise_std = 0.0
         # Additional sensor types enabled for this environment
-        self._sensor_types = tuple(getattr(config, 'environment_sensor_types', ()))
+        self._sensor_types = tuple(getattr(config, "environment_sensor_types", ()))
 
     def read_sensors(self) -> dict[str, Any]:
         """Read raw sensor data.
@@ -93,7 +95,9 @@ class SensorProcessor:
         dict[str, Any]
             Raw sensor readings keyed by sensor identifier.
         """
-        raise NotImplementedError("Sensor reading is provided externally in this implementation")
+        raise NotImplementedError(
+            "Sensor reading is provided externally in this implementation"
+        )
 
     def fuse_sensors(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Fuse raw sensor data into a unified state.
@@ -143,7 +147,14 @@ class SensorProcessor:
         try:
             raw_orientation = raw_data.get("orientation")
             if isinstance(raw_orientation, (list, tuple)) and len(raw_orientation) >= 3:
-                orientation = cast(tuple[float, float, float], (float(raw_orientation[0]), float(raw_orientation[1]), float(raw_orientation[2])))
+                orientation = cast(
+                    tuple[float, float, float],
+                    (
+                        float(raw_orientation[0]),
+                        float(raw_orientation[1]),
+                        float(raw_orientation[2]),
+                    ),
+                )
         except Exception:
             orientation = (0.0, 0.0, 0.0)
         # Apply calibration factors if present (first three entries)
@@ -198,11 +209,18 @@ class SensorProcessor:
         fused["linear_velocity"] = lin_vel
         # Acceleration: derivative of linear velocity
         acc = (0.0, 0.0, 0.0)
-        if self._prev_lin_vel is not None and self._prev_timestamp is not None and timestamp is not None:
+        if (
+            self._prev_lin_vel is not None
+            and self._prev_timestamp is not None
+            and timestamp is not None
+        ):
             dt = timestamp - self._prev_timestamp
             if dt > 0.0:
                 try:
-                    acc = tuple((lv - pv) / dt for lv, pv in zip(lin_vel, self._prev_lin_vel, strict=False))
+                    acc = tuple(
+                        (lv - pv) / dt
+                        for lv, pv in zip(lin_vel, self._prev_lin_vel, strict=False)
+                    )
                 except Exception:
                     acc = (0.0, 0.0, 0.0)
         # Apply calibration factors for acceleration if provided (next three entries)

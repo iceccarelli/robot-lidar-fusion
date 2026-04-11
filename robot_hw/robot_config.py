@@ -24,6 +24,7 @@ from dataclasses import dataclass
 # Helper functions
 # ----------------------------------------------------------------------
 
+
 def _b(name: str, default: bool = False) -> bool:
     """Parse an environment variable into a boolean.
 
@@ -37,7 +38,9 @@ def _b(name: str, default: bool = False) -> bool:
     return str(val).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 
 
-def _f(name: str, default: float, *, min: float | None = None, max: float | None = None) -> float:
+def _f(
+    name: str, default: float, *, min: float | None = None, max: float | None = None
+) -> float:
     """Parse an environment variable into a float with optional bounds."""
     raw = os.getenv(name)
     try:
@@ -82,6 +85,7 @@ def _floats_csv(name: str, default: str) -> tuple[float, ...]:
 # ----------------------------------------------------------------------
 # Data class for robot configuration
 # ----------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class RobotConfig:
@@ -349,7 +353,6 @@ def load() -> RobotConfig:
         environment_sensor_types=_csv("ENVIRONMENT_SENSOR_TYPES", ""),
         max_position_error=_f("MAX_POSITION_ERROR", 5.0, min=0.0),
         max_velocity_error=_f("MAX_VELOCITY_ERROR", 2.0, min=0.0),
-
         # Sensor integration flags and parameters
         enable_lidar=_b("ENABLE_LIDAR", False),
         enable_camera=_b("ENABLE_CAMERA", False),
@@ -362,6 +365,9 @@ def load() -> RobotConfig:
         lidar_port=int(os.getenv("LIDAR_PORT", "7502")),
         imu_port=int(os.getenv("IMU_PORT", "7503")),
         camera_device=(
-            None if (val := os.getenv("CAMERA_DEVICE")) is None or val.strip().lower() == "none" else int(val)
+            None
+            if (val := os.getenv("CAMERA_DEVICE")) is None
+            or val.strip().lower() == "none"
+            else int(val)
         ),
     )

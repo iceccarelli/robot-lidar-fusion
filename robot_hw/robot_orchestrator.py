@@ -60,7 +60,12 @@ from robot_hw.perception.sensor_processing import SensorProcessor
 from robot_hw.perception.time_sync import TimeSync  # type: ignore
 from robot_hw.planning.mission_planner import MissionPlanner
 from robot_hw.planning.navigation_manager import NavigationManager
-from robot_hw.planning.task_hardware_mapping import JointInstruction, KinematicsModel, Task, TaskHardwareMapper
+from robot_hw.planning.task_hardware_mapping import (
+    JointInstruction,
+    KinematicsModel,
+    Task,
+    TaskHardwareMapper,
+)
 from robot_hw.power.battery_management import BatteryManager, BatteryState
 from robot_hw.power.thermal_management import ThermalManager
 
@@ -77,9 +82,13 @@ class DummyKinematicsModel:
     implementations should provide inverse kinematics solving.
     """
 
-    def inverse_kinematics(self, target: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    def inverse_kinematics(
+        self, target: dict[str, Any], current: dict[str, Any]
+    ) -> dict[str, Any]:
         if "joint_positions" in target:
-            return {jid: {"position": pos} for jid, pos in target["joint_positions"].items()}
+            return {
+                jid: {"position": pos} for jid, pos in target["joint_positions"].items()
+            }
         # Fallback: pretend we have two joints with positions derived from target
         # This is purely illustrative; a real IK solver would compute
         # joint angles from Cartesian coordinates.
@@ -107,20 +116,26 @@ class RobotOrchestrator:
         Default maximum joint torque.
     """
 
-    def __init__(self,
-                 cycle_time: float = 0.01,
-                 total_memory_bytes: int = 1024 * 1024,
-                 battery_capacity_wh: float = 100.0,
-                 max_temperature: float = 60.0,
-                 max_velocity: float = 1.0,
-                 max_torque: float = 1.0) -> None:
+    def __init__(
+        self,
+        cycle_time: float = 0.01,
+        total_memory_bytes: int = 1024 * 1024,
+        battery_capacity_wh: float = 100.0,
+        max_temperature: float = 60.0,
+        max_velocity: float = 1.0,
+        max_torque: float = 1.0,
+    ) -> None:
         self.cycle_time = cycle_time
         # Instantiate hardware synchroniser with a mock interface
-        self.hardware = HardwareSynchronizer(HardwareSynchronizer.MockHardwareInterface())
-        self.joint_sync = JointSynchronizer(self.hardware,
-                                            max_velocity=max_velocity,
-                                            max_torque=max_torque,
-                                            cycle_time=cycle_time)
+        self.hardware = HardwareSynchronizer(
+            HardwareSynchronizer.MockHardwareInterface()
+        )
+        self.joint_sync = JointSynchronizer(
+            self.hardware,
+            max_velocity=max_velocity,
+            max_torque=max_torque,
+            cycle_time=cycle_time,
+        )
         self.battery_manager = BatteryManager(capacity_wh=battery_capacity_wh)
         self.thermal_manager = ThermalManager(max_temp=max_temperature)
         self.memory_manager = MemoryManager(total_bytes=total_memory_bytes)
@@ -185,10 +200,9 @@ class RobotOrchestrator:
         # Record the current environment profile to detect changes during runtime
         self._current_env_profile = self.config.environment_profile
         # Stage G: mission planner and communication interface
-        self.mission_planner = MissionPlanner(self.config,
-                                              self.battery_manager,
-                                              self.thermal_manager,
-                                              self.hazard_manager)
+        self.mission_planner = MissionPlanner(
+            self.config, self.battery_manager, self.thermal_manager, self.hazard_manager
+        )
         self.communication = CommunicationInterface(self.config)
         # Establish communication (no‑op in skeleton)
         with contextlib.suppress(Exception):
@@ -215,6 +229,7 @@ class RobotOrchestrator:
                 if self.config.use_ros2:
                     try:
                         from perception.sensor_io_ros2 import Ros2SensorIO  # type: ignore
+
                         self.sensor_io = Ros2SensorIO(
                             lidar_topic=self.config.lidar_topic,
                             camera_topic=self.config.camera_topic,
@@ -228,6 +243,7 @@ class RobotOrchestrator:
                 else:
                     # Direct SDK ingestion: instantiate separate I/O objects
                     from perception.sensor_io_direct import OusterSDKSensorIO, UvcCameraSensorIO  # type: ignore
+
                     if self.config.enable_lidar:
                         try:
                             self.lidar_io = OusterSDKSensorIO(
@@ -276,8 +292,7 @@ class RobotOrchestrator:
                 positions[joint_id] = info.get("position")
                 velocities[joint_id] = info.get("velocity")
                 torques[joint_id] = info.get("torque")
-        state: dict[str, Any] = {"timestamp": timestamp,
-                                 "positions": positions}
+        state: dict[str, Any] = {"timestamp": timestamp, "positions": positions}
         if velocities:
             state["velocities"] = velocities
         if torques:
@@ -337,7 +352,10 @@ class RobotOrchestrator:
                 new_config = load_config()
             except Exception:
                 new_config = None
-            if new_config is not None and new_config.environment_profile != self._current_env_profile:
+            if (
+                new_config is not None
+                and new_config.environment_profile != self._current_env_profile
+            ):
                 # Update configuration and reconfigure environment
                 self.config = new_config
                 self._current_env_profile = new_config.environment_profile
@@ -345,7 +363,9 @@ class RobotOrchestrator:
                 self.environment_adapter = EnvironmentAdapter(self.config)
                 with contextlib.suppress(Exception):
                     self.environment_adapter.configure()
-                self.environment_overrides = self.environment_adapter.get_current_limits()
+                self.environment_overrides = (
+                    self.environment_adapter.get_current_limits()
+                )
                 env_thermal = self.environment_overrides.get("thermal_limit_c")
                 if env_thermal is not None:
                     self.thermal_manager.max_temp = float(env_thermal)
@@ -354,7 +374,9 @@ class RobotOrchestrator:
                     noise_override = self.environment_overrides.get("sensor_noise_std")
                     if noise_override is not None:
                         self.sensor_processor._noise_std = float(noise_override)  # type: ignore[attr-defined]
-                    types_override = self.environment_overrides.get("environment_sensor_types")
+                    types_override = self.environment_overrides.get(
+                        "environment_sensor_types"
+                    )
                     if types_override:
                         self.sensor_processor._sensor_types = tuple(types_override)  # type: ignore[attr-defined]
                 except Exception:
@@ -374,10 +396,12 @@ class RobotOrchestrator:
                 # Reconfigure fault detector with updated config
                 self.fault_detector = FaultDetector(self.config)
                 # Recreate mission planner and communication with updated references
-                self.mission_planner = MissionPlanner(self.config,
-                                                     self.battery_manager,
-                                                     self.thermal_manager,
-                                                     self.hazard_manager)
+                self.mission_planner = MissionPlanner(
+                    self.config,
+                    self.battery_manager,
+                    self.thermal_manager,
+                    self.hazard_manager,
+                )
                 # Communication uses config keys; we reconnect
                 self.communication = CommunicationInterface(self.config)
                 with contextlib.suppress(Exception):
@@ -440,7 +464,9 @@ class RobotOrchestrator:
                                     lidar_frame = None
                             if self.camera_io is not None:
                                 try:
-                                    camera_frame = self.camera_io.get_latest_camera_frame()
+                                    camera_frame = (
+                                        self.camera_io.get_latest_camera_frame()
+                                    )
                                 except Exception:
                                     camera_frame = None
                         # Feed camera frames into the time sync buffer
@@ -475,8 +501,14 @@ class RobotOrchestrator:
                 # Stage E: fault detection
                 # Evaluate sensor health using the fault detector and record any faults
                 with contextlib.suppress(Exception):
-                    self.fault_detector.update(self.current_state, self._last_joint_commands)
-                fault_list = self.fault_detector.get_faults() if self.fault_detector.has_fault() else []
+                    self.fault_detector.update(
+                        self.current_state, self._last_joint_commands
+                    )
+                fault_list = (
+                    self.fault_detector.get_faults()
+                    if self.fault_detector.has_fault()
+                    else []
+                )
                 # ------------------------------------------------------------------
                 # Stage B: hazard detection (integrate faults)
                 signals = {}
@@ -491,7 +523,9 @@ class RobotOrchestrator:
                 if fault_list:
                     signals["faults"] = list(fault_list)
                 self.hazard_manager.update(signals)
-                self.current_state["hazard_flags"] = self.hazard_manager.current_hazards()
+                self.current_state["hazard_flags"] = (
+                    self.hazard_manager.current_hazards()
+                )
 
                 # Determine overall hazard risk.  High‑risk hazards stop
                 # all task execution; moderate risk triggers throttling.
@@ -513,8 +547,8 @@ class RobotOrchestrator:
                 except Exception:
                     hazard_risk = "high"
                 # Set flags used later in task scheduling
-                hazard_stop = (hazard_risk == "high")
-                hazard_throttle = (hazard_risk == "moderate")
+                hazard_stop = hazard_risk == "high"
+                hazard_throttle = hazard_risk == "moderate"
 
                 # ------------------------------------------------------------------
                 # Stage G: mission planning based on current state
@@ -544,16 +578,21 @@ class RobotOrchestrator:
             # are absent; instead we synthesise simple data.
             timestamp = self.current_state.get("timestamp", cycle * self.cycle_time)
             # Synthesis: battery voltage decays slowly, current is constant
-            battery_state = BatteryState(voltage=50.0 - 0.01 * cycle,
-                                         current=10.0,
-                                         temperature=25.0,
-                                         soc=max(1.0 - 0.001 * cycle, 0.0),
-                                         health=1.0,
-                                         timestamp=timestamp)
+            battery_state = BatteryState(
+                voltage=50.0 - 0.01 * cycle,
+                current=10.0,
+                temperature=25.0,
+                soc=max(1.0 - 0.001 * cycle, 0.0),
+                health=1.0,
+                timestamp=timestamp,
+            )
             self.battery_manager.update(battery_state)
             # Synthesis: temperatures increase slightly with cycle
             # Synthesis of temperatures: one entry per joint (based on positions)
-            temp_data = {joint: 30.0 + 0.1 * cycle for joint in self.current_state.get("positions", {})}
+            temp_data = {
+                joint: 30.0 + 0.1 * cycle
+                for joint in self.current_state.get("positions", {})
+            }
             self.thermal_manager.update(temp_data)
             # ------------------------------------------------------------------
             # 3. Process scheduled tasks
@@ -567,7 +606,9 @@ class RobotOrchestrator:
             # hazard_stop and hazard_throttle are computed earlier in the cycle
             if hazard_stop:
                 # High‑risk hazards require immediate halt of task execution
-                print(f"[Cycle {cycle}] Emergency stop: high‑risk hazard detected; skipping tasks")
+                print(
+                    f"[Cycle {cycle}] Emergency stop: high‑risk hazard detected; skipping tasks"
+                )
             else:
                 with self.concurrency_manager.acquire("tasks"):
                     tasks_to_process = self.pending_tasks
@@ -576,41 +617,59 @@ class RobotOrchestrator:
                     # Map high‑level tasks into joint‑level instructions
                     instructions: list[JointInstruction]
                     try:
-                        instructions = self.task_mapper.map_task(task, self.current_state)
+                        instructions = self.task_mapper.map_task(
+                            task, self.current_state
+                        )
                     except Exception:
                         # Invalid task; skip and log
                         continue
                     # Estimate energy consumption for these instructions
                     try:
-                        energy_req = self.battery_manager.estimate_task_energy(instructions, self.current_state)
+                        energy_req = self.battery_manager.estimate_task_energy(
+                            instructions, self.current_state
+                        )
                     except Exception:
                         energy_req = 0.0
                     # Decide whether to defer based on energy budget
                     if self.battery_manager.should_defer_task(energy_req):
-                        print(f"[Cycle {cycle}] Task '{getattr(task, 'id', '')}' deferred due to low energy budget")
+                        print(
+                            f"[Cycle {cycle}] Task '{getattr(task, 'id', '')}' deferred due to low energy budget"
+                        )
                         continue
                     # Estimate thermal load
                     try:
-                        thermal_load = self.thermal_manager.estimate_task_thermal_load(instructions, self.current_state)
+                        thermal_load = self.thermal_manager.estimate_task_thermal_load(
+                            instructions, self.current_state
+                        )
                     except Exception:
                         thermal_load = 0.0
                     # Determine if throttling is needed due to thermal or hazard risk
-                    throttle_due_to_thermal = self.thermal_manager.should_throttle(thermal_load)
+                    throttle_due_to_thermal = self.thermal_manager.should_throttle(
+                        thermal_load
+                    )
                     throttle = throttle_due_to_thermal or hazard_throttle
                     # Map instructions into joint commands, applying throttling if required
                     for inst in instructions:
-                        cmd_dict = inst.command.copy() if isinstance(inst.command, dict) else {}
+                        cmd_dict = (
+                            inst.command.copy()
+                            if isinstance(inst.command, dict)
+                            else {}
+                        )
                         if throttle:
                             # Reduce velocity and torque commands by 50 % to mitigate risk
                             if cmd_dict.get("velocity") is not None:
                                 with contextlib.suppress(Exception):
-                                    cmd_dict["velocity"] = 0.5 * float(cmd_dict["velocity"])
+                                    cmd_dict["velocity"] = 0.5 * float(
+                                        cmd_dict["velocity"]
+                                    )
                             if cmd_dict.get("torque") is not None:
                                 with contextlib.suppress(Exception):
                                     cmd_dict["torque"] = 0.5 * float(cmd_dict["torque"])
-                        jc = JointCommand(position=cmd_dict.get("position"),
-                                          velocity=cmd_dict.get("velocity"),
-                                          torque=cmd_dict.get("torque"))
+                        jc = JointCommand(
+                            position=cmd_dict.get("position"),
+                            velocity=cmd_dict.get("velocity"),
+                            torque=cmd_dict.get("torque"),
+                        )
                         desired_joint_commands[inst.joint_id] = jc
             # ------------------------------------------------------------------
             # 5. Apply joint commands via joint synchroniser
@@ -618,12 +677,16 @@ class RobotOrchestrator:
             if desired_joint_commands:
                 # Extract current positions and velocities for the joints we will command
                 joint_state_only = {
-                    jid: {"position": self.current_state.get("positions", {}).get(jid),
-                          "velocity": self.current_state.get("velocities", {}).get(jid)}
+                    jid: {
+                        "position": self.current_state.get("positions", {}).get(jid),
+                        "velocity": self.current_state.get("velocities", {}).get(jid),
+                    }
                     for jid in desired_joint_commands
                 }
                 with self.concurrency_manager.acquire("hardware"):
-                    sensor_data = self.joint_sync.synchronize(desired_joint_commands, joint_state_only)
+                    sensor_data = self.joint_sync.synchronize(
+                        desired_joint_commands, joint_state_only
+                    )
                 self.current_state = self._normalise_state(sensor_data)
                 # Record the commands sent for fault detection in the next cycle
                 self._last_joint_commands = desired_joint_commands.copy()
@@ -634,12 +697,18 @@ class RobotOrchestrator:
             if not consistent:
                 # In production, log errors and potentially trigger an emergency stop
                 # Here we simply print the errors for demonstration purposes
-                print(f"[Cycle {cycle}] Consistency errors: {self.consistency_verifier.errors}")
+                print(
+                    f"[Cycle {cycle}] Consistency errors: {self.consistency_verifier.errors}"
+                )
             # Check battery and thermal safety
             if not self.battery_manager.is_ok():
-                print(f"[Cycle {cycle}] Warning: battery low or temperature out of range")
+                print(
+                    f"[Cycle {cycle}] Warning: battery low or temperature out of range"
+                )
             if not self.thermal_manager.is_within_limits():
-                print(f"[Cycle {cycle}] Warning: thermal limit exceeded; cooling recommended")
+                print(
+                    f"[Cycle {cycle}] Warning: thermal limit exceeded; cooling recommended"
+                )
                 # Compute cooling duties and notify any registered callbacks
                 duties = self.thermal_manager.recommended_cooling()
                 # In this demonstration, simply print the duty cycles
@@ -651,12 +720,32 @@ class RobotOrchestrator:
                 # Compose telemetry dictionary with key state variables
                 telemetry = {
                     "timestamp": self.current_state.get("timestamp"),
-                    "battery_soc": getattr(self.battery_manager.state, "soc", None) if self.battery_manager.state else None,
-                    "battery_voltage": getattr(self.battery_manager.state, "voltage", None) if self.battery_manager.state else None,
-                    "battery_current": getattr(self.battery_manager.state, "current", None) if self.battery_manager.state else None,
-                    "thermal_max": max(self.thermal_manager.current_temps.values()) if self.thermal_manager.current_temps else None,
+                    "battery_soc": (
+                        getattr(self.battery_manager.state, "soc", None)
+                        if self.battery_manager.state
+                        else None
+                    ),
+                    "battery_voltage": (
+                        getattr(self.battery_manager.state, "voltage", None)
+                        if self.battery_manager.state
+                        else None
+                    ),
+                    "battery_current": (
+                        getattr(self.battery_manager.state, "current", None)
+                        if self.battery_manager.state
+                        else None
+                    ),
+                    "thermal_max": (
+                        max(self.thermal_manager.current_temps.values())
+                        if self.thermal_manager.current_temps
+                        else None
+                    ),
                     "hazards": self.hazard_manager.current_hazards(),
-                    "faults": self.fault_detector.get_faults() if self.fault_detector.has_fault() else [],
+                    "faults": (
+                        self.fault_detector.get_faults()
+                        if self.fault_detector.has_fault()
+                        else []
+                    ),
                 }
                 self.communication.send_telemetry(telemetry)
             except Exception:
@@ -672,13 +761,19 @@ class RobotOrchestrator:
 
 if __name__ == "__main__":
     # Example usage: run the orchestrator for a few cycles and submit a simple task
-    orchestrator = RobotOrchestrator(cycle_time=0.01,
-                                     total_memory_bytes=1024 * 1024,
-                                     battery_capacity_wh=100.0,
-                                     max_temperature=60.0,
-                                     max_velocity=2.0,
-                                     max_torque=1.5)
+    orchestrator = RobotOrchestrator(
+        cycle_time=0.01,
+        total_memory_bytes=1024 * 1024,
+        battery_capacity_wh=100.0,
+        max_temperature=60.0,
+        max_velocity=2.0,
+        max_torque=1.5,
+    )
     # Submit a high‑level task to move joints to specific positions
-    orchestrator.submit_task(Task(id="move_joints",
-                                  parameters={"joint_positions": {"joint1": 0.5, "joint2": -0.3}}))
+    orchestrator.submit_task(
+        Task(
+            id="move_joints",
+            parameters={"joint_positions": {"joint1": 0.5, "joint2": -0.3}},
+        )
+    )
     orchestrator.run(num_cycles=20)

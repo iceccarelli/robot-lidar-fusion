@@ -28,7 +28,9 @@ from robot_hw.robot_orchestrator import RobotOrchestrator  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the robot control loop")
-    parser.add_argument("--cycles", type=int, default=100, help="Number of control cycles to run")
+    parser.add_argument(
+        "--cycles", type=int, default=100, help="Number of control cycles to run"
+    )
     args = parser.parse_args()
 
     config = load_config()
@@ -37,7 +39,9 @@ def main() -> None:
         total_memory_bytes=config.total_memory_bytes,
         battery_capacity_wh=config.battery_capacity_wh,
     )
-    print(f"Starting robot control loop for {args.cycles} cycles at {1/config.cycle_time:.0f} Hz...")
+    print(
+        f"Starting robot control loop for {args.cycles} cycles at {1/config.cycle_time:.0f} Hz..."
+    )
     orchestrator.run(num_cycles=args.cycles)
     print("Control loop finished.")
 

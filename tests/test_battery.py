@@ -6,7 +6,9 @@ from robot_hw.power.battery_management import BatteryManager, BatteryState
 
 
 def _state(soc: float = 0.8) -> BatteryState:
-    return BatteryState(voltage=48.0, current=5.0, temperature=30.0, soc=soc, health=1.0, timestamp=0.0)
+    return BatteryState(
+        voltage=48.0, current=5.0, temperature=30.0, soc=soc, health=1.0, timestamp=0.0
+    )
 
 
 def test_battery_manager_creation():

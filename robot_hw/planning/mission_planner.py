@@ -48,11 +48,13 @@ class MissionPlanner:
         while any hazard or fault is active.
     """
 
-    def __init__(self,
-                 config: RobotConfig,
-                 battery_manager: BatteryManager,
-                 thermal_manager: ThermalManager,
-                 hazard_manager: HazardManager) -> None:
+    def __init__(
+        self,
+        config: RobotConfig,
+        battery_manager: BatteryManager,
+        thermal_manager: ThermalManager,
+        hazard_manager: HazardManager,
+    ) -> None:
         self._config = config
         self._battery_manager = battery_manager
         self._thermal_manager = thermal_manager
@@ -112,12 +114,17 @@ class MissionPlanner:
                 risk = info.get("risk_level")
                 if risk == "high":
                     # Defer tasks due to high‑severity hazard
-                    self._logger.debug("Deferring tasks due to hazard with high risk: %s", info)
+                    self._logger.debug(
+                        "Deferring tasks due to hazard with high risk: %s", info
+                    )
                     return tasks
             except Exception:
                 continue
         # Skip task issuance if the battery or thermal state is unsafe
-        if not self._battery_manager.is_ok() or not self._thermal_manager.is_within_limits():
+        if (
+            not self._battery_manager.is_ok()
+            or not self._thermal_manager.is_within_limits()
+        ):
             return tasks
         # Pop the next goal and generate a navigation task
         if self._goal_queue:
@@ -129,6 +136,8 @@ class MissionPlanner:
                 # Invalid goal; skip and continue
                 return tasks
             # Create a navigation task with optional priority field
-            task = Task(id="navigate_to", parameters={"x": x, "y": y, "priority": len(tasks)})
+            task = Task(
+                id="navigate_to", parameters={"x": x, "y": y, "priority": len(tasks)}
+            )
             tasks.append(task)
         return tasks

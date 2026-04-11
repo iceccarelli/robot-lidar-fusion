@@ -112,7 +112,9 @@ class ConcurrencyManager:
                 lock.release()
 
     @contextmanager
-    def acquire_many(self, names: list[str], timeout: float | None = None) -> Iterator[None]:
+    def acquire_many(
+        self, names: list[str], timeout: float | None = None
+    ) -> Iterator[None]:
         """Context manager to acquire multiple named locks with optional timeout.
 
         Locks are acquired in sorted name order to avoid deadlocks.  If a
@@ -142,13 +144,19 @@ class ConcurrencyManager:
         try:
             for name in unique_names:
                 lock = self.get_lock(name)
-                ok = lock.acquire(timeout=timeout) if timeout is not None else lock.acquire()
+                ok = (
+                    lock.acquire(timeout=timeout)
+                    if timeout is not None
+                    else lock.acquire()
+                )
                 if not ok:
                     # Failed to acquire; release previously acquired locks
                     for n in reversed(acquired_names):
                         with suppress(RuntimeError):
                             self._locks[n].release()
-                    raise TimeoutError(f"Timeout acquiring lock '{name}' after {timeout} s")
+                    raise TimeoutError(
+                        f"Timeout acquiring lock '{name}' after {timeout} s"
+                    )
                 acquired_names.append(name)
             yield
         finally:
@@ -176,7 +184,7 @@ class ConcurrencyManager:
         ceiling : int
             The priority ceiling value (higher means more critical).
         """
-        if not hasattr(self, '_priority_ceilings'):
+        if not hasattr(self, "_priority_ceilings"):
             self._priority_ceilings: dict[str, int] = {}
         self._priority_ceilings[name] = int(ceiling)
 
@@ -195,4 +203,4 @@ class ConcurrencyManager:
         int | None
             The priority ceiling value or None.
         """
-        return getattr(self, '_priority_ceilings', {}).get(name)
+        return getattr(self, "_priority_ceilings", {}).get(name)

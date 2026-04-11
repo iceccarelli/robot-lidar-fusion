@@ -63,7 +63,9 @@ class TimeSync:
 
     def __init__(self, max_offset: float = 0.05, buffer_size: int = 10) -> None:
         self.max_offset = float(max_offset)
-        self.buffer: collections.deque[CameraFrame] = collections.deque(maxlen=buffer_size)
+        self.buffer: collections.deque[CameraFrame] = collections.deque(
+            maxlen=buffer_size
+        )
 
     def add_camera_frame(self, frame: CameraFrame) -> None:
         """Append a camera frame to the buffer for future matching."""
@@ -91,7 +93,7 @@ class TimeSync:
         if not self.buffer:
             return SyncResult(lidar_frame=lidar_frame, camera_frame=None, offset=None)
         best: CameraFrame | None = None
-        best_dt: float = float('inf')
+        best_dt: float = float("inf")
         ts = lidar_frame.timestamp
         for cf in self.buffer:
             dt = abs(cf.timestamp - ts)
@@ -99,5 +101,7 @@ class TimeSync:
                 best = cf
                 best_dt = dt
         if best is not None and best_dt <= self.max_offset:
-            return SyncResult(lidar_frame=lidar_frame, camera_frame=best, offset=best_dt)
+            return SyncResult(
+                lidar_frame=lidar_frame, camera_frame=best, offset=best_dt
+            )
         return SyncResult(lidar_frame=lidar_frame, camera_frame=None, offset=None)

@@ -80,7 +80,8 @@ class ConsistencyVerifier:
                 # Verify monotonicity if we have a previous timestamp
                 if self._last_timestamp is not None and ts_val <= self._last_timestamp:
                     self.errors.append(
-                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}")
+                        f"Timestamp {ts_val} not greater than previous {self._last_timestamp}"
+                    )
                 self._last_timestamp = ts_val
         # Check positions
         positions = state.get("positions")
@@ -130,28 +131,38 @@ class ConsistencyVerifier:
         orientation = state.get("orientation")
         if orientation is not None:
             if not isinstance(orientation, (list, tuple)):
-                self.errors.append(f"Invalid orientation type (expected list/tuple): {orientation}")
+                self.errors.append(
+                    f"Invalid orientation type (expected list/tuple): {orientation}"
+                )
             else:
                 if len(orientation) not in (3, 4):
-                    self.errors.append(f"Orientation must have 3 or 4 elements: {orientation}")
+                    self.errors.append(
+                        f"Orientation must have 3 or 4 elements: {orientation}"
+                    )
                 else:
                     for i, val in enumerate(orientation):
                         try:
                             _ = float(val)
                         except Exception:
-                            self.errors.append(f"Invalid orientation component {i}: {val}")
+                            self.errors.append(
+                                f"Invalid orientation component {i}: {val}"
+                            )
 
         # Linear velocity should be a list/tuple of 3 numeric values
         lin_vel = state.get("linear_velocity")
         if lin_vel is not None:
             if not isinstance(lin_vel, (list, tuple)) or len(lin_vel) != 3:
-                self.errors.append(f"Invalid linear_velocity (expected 3‑tuple): {lin_vel}")
+                self.errors.append(
+                    f"Invalid linear_velocity (expected 3‑tuple): {lin_vel}"
+                )
             else:
                 for i, val in enumerate(lin_vel):
                     try:
                         _ = float(val)
                     except Exception:
-                        self.errors.append(f"Invalid linear_velocity component {i}: {val}")
+                        self.errors.append(
+                            f"Invalid linear_velocity component {i}: {val}"
+                        )
 
         # Acceleration should be a list/tuple of 3 numeric values
         acc = state.get("acceleration")
@@ -168,5 +179,7 @@ class ConsistencyVerifier:
         # Hazard flags should be a dictionary if present
         hazard_flags = state.get("hazard_flags")
         if hazard_flags is not None and not isinstance(hazard_flags, dict):
-            self.errors.append(f"Invalid hazard_flags field (expected dict): {hazard_flags}")
+            self.errors.append(
+                f"Invalid hazard_flags field (expected dict): {hazard_flags}"
+            )
         return not self.errors

@@ -84,14 +84,17 @@ from .sensor_frames import CameraFrame, LidarFrame  # noqa: E402
 class Ros2SensorIO:
     """Ingest LiDAR and camera data from ROS2 topics."""
 
-    def __init__(self, *,
-                 lidar_topic: str,
-                 camera_topic: str,
-                 camera_info_topic: str,
-                 node_name: str = 'sensor_io',
-                 qos_depth: int = 10) -> None:
+    def __init__(
+        self,
+        *,
+        lidar_topic: str,
+        camera_topic: str,
+        camera_info_topic: str,
+        node_name: str = "sensor_io",
+        qos_depth: int = 10,
+    ) -> None:
         if rclpy is None:
-            raise RuntimeError('ROS2 is not available; cannot initialise Ros2SensorIO')
+            raise RuntimeError("ROS2 is not available; cannot initialise Ros2SensorIO")
         self._lidar_topic = lidar_topic
         self._camera_topic = camera_topic
         self._camera_info_topic = camera_info_topic
@@ -112,12 +115,14 @@ class Ros2SensorIO:
             return
         # Initialise ROS2 and create node
         rclpy.init(args=None)
-        self._node = _SensorIONode(parent=self,
-                                   node_name=self._node_name,
-                                   lidar_topic=self._lidar_topic,
-                                   camera_topic=self._camera_topic,
-                                   camera_info_topic=self._camera_info_topic,
-                                   qos_depth=self._qos_depth)
+        self._node = _SensorIONode(
+            parent=self,
+            node_name=self._node_name,
+            lidar_topic=self._lidar_topic,
+            camera_topic=self._camera_topic,
+            camera_info_topic=self._camera_info_topic,
+            qos_depth=self._qos_depth,
+        )
         self._thread = threading.Thread(target=self._spin_thread, daemon=True)
         self._thread.start()
 
@@ -153,28 +158,31 @@ class Ros2SensorIO:
 class _SensorIONode(Node):
     """ROS2 node that receives LiDAR and camera messages and converts them."""
 
-    def __init__(self, parent: Ros2SensorIO, node_name: str,
-                 lidar_topic: str, camera_topic: str, camera_info_topic: str,
-                 qos_depth: int) -> None:
+    def __init__(
+        self,
+        parent: Ros2SensorIO,
+        node_name: str,
+        lidar_topic: str,
+        camera_topic: str,
+        camera_info_topic: str,
+        qos_depth: int,
+    ) -> None:
         super().__init__(node_name)
         self._parent = parent
         # Use queue depth directly to avoid a local ROS QoS import in typed code
         qos = qos_depth
         # Subscribe to LiDAR point clouds
-        self._lidar_sub = self.create_subscription(PointCloud2,
-                                                  lidar_topic,
-                                                  self._lidar_callback,
-                                                  qos)
+        self._lidar_sub = self.create_subscription(
+            PointCloud2, lidar_topic, self._lidar_callback, qos
+        )
         # Subscribe to camera images
-        self._camera_sub = self.create_subscription(Image,
-                                                   camera_topic,
-                                                   self._camera_callback,
-                                                   qos)
+        self._camera_sub = self.create_subscription(
+            Image, camera_topic, self._camera_callback, qos
+        )
         # Subscribe to camera info for intrinsics
-        self._cinfo_sub = self.create_subscription(CameraInfo,
-                                                   camera_info_topic,
-                                                   self._camera_info_callback,
-                                                   qos)
+        self._cinfo_sub = self.create_subscription(
+            CameraInfo, camera_info_topic, self._camera_info_callback, qos
+        )
 
     def _lidar_callback(self, msg: PointCloud2) -> None:
         # Extract timestamp; fallback to current time on failure
@@ -229,7 +237,6 @@ class _SensorIONode(Node):
         )
         self._parent._latest_lidar = lf
 
-
     def _camera_info_callback(self, msg: CameraInfo) -> None:
         # Extract intrinsics from camera info
         try:
@@ -239,12 +246,12 @@ class _SensorIONode(Node):
             cy = float(msg.k[5])
             d = [float(x) for x in msg.d]
             intrinsics = {
-                'fx': fx,
-                'fy': fy,
-                'cx': cx,
-                'cy': cy,
-                'D': d,
-                'distortion_model': msg.distortion_model
+                "fx": fx,
+                "fy": fy,
+                "cx": cx,
+                "cy": cy,
+                "D": d,
+                "distortion_model": msg.distortion_model,
             }
             self._parent._camera_intrinsics = intrinsics
         except Exception:
@@ -259,18 +266,24 @@ class _SensorIONode(Node):
         # Convert raw bytes to numpy array if available
         try:
             if np is None:
-                raise ImportError('NumPy unavailable')
-            channels = 3 if msg.encoding in ('rgb8', 'bgr8') else 1
+                raise ImportError("NumPy unavailable")
+            channels = 3 if msg.encoding in ("rgb8", "bgr8") else 1
             arr = np.frombuffer(msg.data, dtype=np.uint8)
             arr = arr.reshape((msg.height, msg.width, channels))
             frame: Any = arr
         except Exception:
             frame = bytes(msg.data)
-        intrinsics = dict(self._parent._camera_intrinsics) if self._parent._camera_intrinsics else {}
-        frame_id = getattr(msg.header, 'frame_id', 'camera') or 'camera'
-        cf = CameraFrame(timestamp=ts,
-                         frame_id=frame_id,
-                         image=frame,
-                         intrinsics=intrinsics,
-                         metadata={})
+        intrinsics = (
+            dict(self._parent._camera_intrinsics)
+            if self._parent._camera_intrinsics
+            else {}
+        )
+        frame_id = getattr(msg.header, "frame_id", "camera") or "camera"
+        cf = CameraFrame(
+            timestamp=ts,
+            frame_id=frame_id,
+            image=frame,
+            intrinsics=intrinsics,
+            metadata={},
+        )
         self._parent._latest_camera = cf

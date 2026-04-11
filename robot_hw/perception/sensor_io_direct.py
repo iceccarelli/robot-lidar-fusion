@@ -58,10 +58,18 @@ from .sensor_frames import CameraFrame, LidarFrame
 class OusterSDKSensorIO:
     """Ingest LiDAR frames directly from an Ouster sensor using the SDK."""
 
-    def __init__(self, *, host_ip: str, lidar_ip: str,
-                 lidar_port: int = 7502, imu_port: int = 7503) -> None:
+    def __init__(
+        self,
+        *,
+        host_ip: str,
+        lidar_ip: str,
+        lidar_port: int = 7502,
+        imu_port: int = 7503,
+    ) -> None:
         if ouster_client is None:
-            raise RuntimeError('ouster-sdk is not installed; cannot initialise OusterSDKSensorIO')
+            raise RuntimeError(
+                "ouster-sdk is not installed; cannot initialise OusterSDKSensorIO"
+            )
         self.host_ip = host_ip
         self.lidar_ip = lidar_ip
         self.lidar_port = int(lidar_port)
@@ -101,9 +109,11 @@ class OusterSDKSensorIO:
         if ouster_client is None:
             return
         try:
-            with ouster_client.Sensor(lidar_host=self.lidar_ip,
-                                      lidar_port=self.lidar_port,
-                                      imu_port=self.imu_port) as sensor:
+            with ouster_client.Sensor(
+                lidar_host=self.lidar_ip,
+                lidar_port=self.lidar_port,
+                imu_port=self.imu_port,
+            ) as sensor:
                 scans = ouster_client.Scans(sensor)
                 xyzlut = None
                 if self._metadata is not None:
@@ -121,14 +131,18 @@ class OusterSDKSensorIO:
                             xyz = xyzlut(scan)
                             for row in xyz:
                                 for p in row:
-                                    points.append((float(p[0]), float(p[1]), float(p[2])))
+                                    points.append(
+                                        (float(p[0]), float(p[1]), float(p[2]))
+                                    )
                         except Exception:
                             points = []
-                    lf = LidarFrame(timestamp=ts,
-                                    frame_id='os_sensor',
-                                    points_xyz=points,
-                                    intensities=None,
-                                    metadata={})
+                    lf = LidarFrame(
+                        timestamp=ts,
+                        frame_id="os_sensor",
+                        points_xyz=points,
+                        intensities=None,
+                        metadata={},
+                    )
                     self._latest_lidar = lf
                     if self._stop_event.is_set():
                         break
@@ -139,11 +153,17 @@ class OusterSDKSensorIO:
 class UvcCameraSensorIO:
     """Ingest frames from a USB or RealSense camera using OpenCV/Pyrealsense2."""
 
-    def __init__(self, *, device: int | None = 0, width: int = 640, height: int = 480) -> None:
+    def __init__(
+        self, *, device: int | None = 0, width: int = 640, height: int = 480
+    ) -> None:
         if device is not None and cv2 is None:
-            raise RuntimeError('OpenCV (cv2) is not installed; cannot capture from UVC camera')
+            raise RuntimeError(
+                "OpenCV (cv2) is not installed; cannot capture from UVC camera"
+            )
         if device is None and rs is None:
-            raise RuntimeError('pyrealsense2 is not installed; cannot use RealSense camera')
+            raise RuntimeError(
+                "pyrealsense2 is not installed; cannot use RealSense camera"
+            )
         self.device = device
         self.width = width
         self.height = height
@@ -169,9 +189,11 @@ class UvcCameraSensorIO:
             if rs is not None:
                 self._pipeline = rs.pipeline()
                 config = rs.config()
-                config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, 30)
+                config.enable_stream(
+                    rs.stream.color, self.width, self.height, rs.format.bgr8, 30
+                )
                 if self._pipeline is None:
-                    raise RuntimeError('Failed to initialise RealSense pipeline')
+                    raise RuntimeError("Failed to initialise RealSense pipeline")
                 self._pipeline.start(config)
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -203,20 +225,30 @@ class UvcCameraSensorIO:
                     continue
                 ts = time.time()
                 try:
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) if cv2 is not None else frame
+                    frame_rgb = (
+                        cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        if cv2 is not None
+                        else frame
+                    )
                     img_data = frame_rgb
                 except Exception:
                     img_data = frame
-                cf = CameraFrame(timestamp=ts,
-                                 frame_id='camera',
-                                 image=img_data,
-                                 intrinsics={},
-                                 metadata={})
+                cf = CameraFrame(
+                    timestamp=ts,
+                    frame_id="camera",
+                    image=img_data,
+                    intrinsics={},
+                    metadata={},
+                )
                 self._latest_camera = cf
             elif self.device is None and self._pipeline is not None:
                 frames = None
                 try:
-                    frames = self._pipeline.wait_for_frames(timeout_ms=100) if rs is not None else None
+                    frames = (
+                        self._pipeline.wait_for_frames(timeout_ms=100)
+                        if rs is not None
+                        else None
+                    )
                 except Exception:
                     frames = None
                 if frames is None:
@@ -227,11 +259,13 @@ class UvcCameraSensorIO:
                 ts = time.time()
                 try:
                     img = np.asanyarray(color_frame.get_data())
-                    cf = CameraFrame(timestamp=ts,
-                                     frame_id='camera',
-                                     image=img,
-                                     intrinsics={},
-                                     metadata={})
+                    cf = CameraFrame(
+                        timestamp=ts,
+                        frame_id="camera",
+                        image=img,
+                        intrinsics={},
+                        metadata={},
+                    )
                     self._latest_camera = cf
                 except Exception:
                     continue
