@@ -1,249 +1,262 @@
 # Robot LiDAR Fusion
 
-**The latest version of an open‑source control stack for autonomous robots with LiDAR‑camera sensor fusion.**  
-One codebase. Any robot arm. Any LiDAR. Any camera. Any environment.
+**Robot LiDAR Fusion** is an open-source robotics software stack for teams that need a reproducible path from raw sensors to actionable autonomy. It is designed for **LiDAR-camera perception**, **ROS 2-native integration**, **navigation readiness**, and **safety-aware control**, while still remaining usable on machines that do not have ROS 2 installed.
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/iceccarelli/robot-lidar-fusion/actions)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-yellow)](https://github.com/iceccarelli/robot-lidar-fusion)
+This repository is not trying to be a flashy demo. It is meant to become a reliable foundation for real robotics work: ingest sensors, align time, fuse observations, build scene understanding, hand that understanding to planning and control, and do all of it with testing, packaging, containerization, and release discipline.
 
----
+The project is being developed in stages. Today, the strongest guarantees are around **packaging**, **CI**, **code quality**, and the basic perception/control scaffolding. The roadmap then moves toward **reproducible demos**, **real sensor fusion**, **mapping and navigation**, and finally **simulation, benchmarking, and telemetry**.
 
-## 📋 Table of Contents
+| Area | Current intent |
+|---|---|
+| Perception | Build a trustworthy LiDAR-camera fusion pipeline with ROS 2 as the native runtime path |
+| Controls | Keep actuator and orchestration interfaces deterministic and testable |
+| Releases | Enforce versioned, typed, scanned, packaged, and containerized delivery |
+| Adoption | Make it easy for researchers and engineers to run, inspect, extend, and benchmark |
 
-- [What Is This?](#what-is-this)
-- [Architecture](#architecture)
-- [Key Features](#key-features)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Supported Sensors](#supported-sensors)
-- [Examples](#examples)
-- [Enterprise & Gateway](#enterprise--gateway)
-- [Contributing](#contributing)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
+## Why this project exists
 
----
+Most robotics repositories solve one narrow problem well, but leave the integrator to connect everything else by hand. In practice, that means one code path for raw sensor drivers, another for frame alignment, another for fusion, another for planning, and a final collection of brittle scripts for deployment. The result is usually impressive in a lab notebook and fragile in a real workflow.
 
-## What Is This?
+**Robot LiDAR Fusion** exists to close that gap. The goal is to provide a single engineering baseline where perception, planning, safety, validation, and publication discipline all move together. If a feature cannot be demonstrated, tested, typed, scanned, packaged, containerized, and documented, it is not finished.
 
-Robot LiDAR Fusion is a **modular, hardware‑agnostic software foundation** for building autonomous robots that perceive the world through LiDAR point clouds and camera images. It provides a complete control stack—from raw sensor ingestion to mission planning and locomotion—running in a deterministic loop at configurable frequencies (default 100 Hz).
+| Design principle | What it means here |
+|---|---|
+| Reproducibility first | Demos and releases must be repeatable across environments |
+| Robotics value over cosmetics | Real perception and planning features come before surface polish |
+| ROS 2-native, not ROS 2-only | ROS 2 should be the main path, but local fallbacks should fail gracefully |
+| Release discipline | Versions, tags, builds, containers, and docs must stay aligned |
 
-We built this because integrating LiDAR, cameras, joint controllers, battery management, hazard detection, and navigation into a single coherent system is **hard**. Every robotics team ends up writing the same glue code. This project provides that glue as a well‑tested, well‑documented open standard so you can focus on what makes your robot unique.
+## System architecture
 
----
-
-## Architecture
-
-The system is orchestrated by a deterministic loop that synchronises all modules every cycle. The diagram below illustrates the core components and their relationships.
+At a high level, the repository is organized around a deterministic chain: **ingest**, **synchronize**, **fuse**, **decide**, **act**, and **verify**. The orchestrator is the spine of the system, but the real value comes from how the perception, planning, control, and safety layers exchange state without collapsing into ad hoc glue code.
 
 ```mermaid
-flowchart TB
-    subgraph Orchestrator["RobotOrchestrator (100 Hz deterministic loop)"]
-        direction LR
-        A[Cycle Start] --> B[Read Sensors]
-        B --> C[Update Managers]
-        C --> D[Process Tasks]
-        D --> E[Map Instructions]
-        E --> F[Sync Actuators]
-        F --> G[Verify Consistency]
-        G --> A
-    end
-
-    subgraph Core["Core Services"]
-        H[Hardware Synchronization]
-        I[Memory Management]
-        J[Hazard Manager]
-        K[Fault Detection]
-        L[Concurrency Control]
-        M[Communication]
-        N[Environment Adapter]
-        O[Execution Stack]
-    end
-
-    subgraph Control["Control"]
-        P[Joint Synchronization]
-        Q[Locomotion Controller]
-    end
-
-    subgraph Perception["Perception"]
-        R[LIDAR Utils]
-        S[Sensor Frames]
-        T[Time Sync]
-        U["Sensor I/O (Direct/ROS2)"]
-        V[Sensor Processing]
-    end
-
-    subgraph Planning["Planning"]
-        W[Mission Planner]
-        X[Navigation Manager]
-        Y[Task-Hardware Mapping]
-    end
-
-    subgraph Power["Power Management"]
-        Z[Battery Manager]
-        AA[Thermal Manager]
-    end
-
-    subgraph AI["AI Layer"]
-        AB[Predictive State Estimation]
-    end
-
-    Orchestrator --- Core
-    Orchestrator --- Control
-    Orchestrator --- Perception
-    Orchestrator --- Planning
-    Orchestrator --- Power
-    Orchestrator --- AI
+flowchart LR
+    A[Sensor Sources\nLiDAR / RGB Camera / Depth / IMU / Encoders] --> B[Sensor I/O Layer\nDirect SDK or ROS 2 topics]
+    B --> C[Timestamp Alignment\nand frame normalization]
+    C --> D[Fusion Pipeline\npoint cloud + image + state cues]
+    D --> E[World Representation\nobstacles / objects / traversability]
+    E --> F[Planning Layer\nmission / navigation / task mapping]
+    F --> G[Control Layer\njoint sync / locomotion / command output]
+    G --> H[Robot Hardware or Simulation]
+    H --> I[Telemetry, logs, and health signals]
+    I --> J[Verification and feedback]
+    J --> C
+    J --> F
 ```
 
-**Deterministic Control Loop** – The `RobotOrchestrator` runs at a configurable frequency (default 100 Hz) with strict cycle‑time enforcement. Each iteration reads sensors, updates all managers, processes the mission queue, maps high‑level tasks to joint‑level instructions, synchronises actuators, and verifies system consistency.
+The first diagram shows the **main autonomy path**. Data enters through direct sensor SDKs or ROS 2 topics, is normalized and synchronized, then becomes a fused scene representation that planning and control can actually use. Just as importantly, telemetry and verification flow back into both perception and planning so the robot is not blindly executing stale assumptions.
 
----
+| Layer | Core responsibility |
+|---|---|
+| Sensor I/O | Acquire frames and point clouds from ROS 2 or direct interfaces |
+| Time and frame handling | Align timestamps and normalize spatial references |
+| Fusion | Combine heterogeneous observations into one usable scene estimate |
+| Planning | Turn scene understanding into tasks, routes, and motion intent |
+| Control | Convert intent into bounded robot commands |
+| Verification | Detect inconsistencies, hazards, faults, and degraded states |
 
-## Key Features
+## Chain of reactions and safety logic
 
-- **Sensor Fusion** – Brings together Ouster OS1 LiDAR point clouds and RGB/depth camera frames with sub‑100 ms time synchronisation. The perception pipeline computes obstacle distances, fuses orientation and velocity data, and feeds a unified state representation to the rest of the stack.
-- **Hardware Agnostic** – The control stack does not depend on any specific robot platform. A `MockHardware` backend is included for development and testing. Swap it for your robot’s SDK by implementing the hardware interface—everything works unchanged.
-- **Safety First** – A multi‑signal hazard manager aggregates proximity, voltage, gas, pedestrian, and environmental hazard signals. The fault detector monitors joint positions, velocities, and timestamps for anomalies. The system can trigger emergency stops when safety thresholds are breached.
-- **Dual Sensor Ingestion** – Supports both ROS2 topic subscription and direct vendor SDK ingestion (Ouster SDK, OpenCV, pyrealsense2). Use ROS2 in production for robust driver support, or direct SDK mode for lightweight testing.
-- **Mission Planning and Navigation** – Goal‑based mission planner, A*‑ready navigation manager, and task‑to‑hardware mapping that translates high‑level goals into joint‑level instructions through inverse kinematics.
-- **Power Management** – Tracks battery state‑of‑charge, estimates task energy costs, defers energy‑intensive tasks when reserves are low, and manages thermal profiles with hysteresis‑based cooling control.
-- **AI Layer** – Predictive state estimation that anticipates near‑future sensor readings to reduce latency and improve control smoothness.
+In robotics, the interesting part is rarely the happy path alone. The critical engineering question is what happens when the chain reacts to new evidence: a closer obstacle, stale timestamps, a hot actuator, a dropped frame, or a control inconsistency. The system therefore needs a visible reaction model rather than hidden conditional logic.
 
----
+```mermaid
+flowchart TD
+    A[New sensor cycle begins] --> B{Are inputs present\nand recent enough?}
+    B -- No --> C[Raise degraded-state event]
+    C --> D[Fallback handling\nslow down / hold / safe stop]
+    B -- Yes --> E[Run time sync and transform checks]
+    E --> F{Calibration and timing valid?}
+    F -- No --> C
+    F -- Yes --> G[Run fusion and scene update]
+    G --> H{Hazard or obstacle detected?}
+    H -- Yes --> I[Hazard manager updates risk state]
+    I --> J{Risk exceeds threshold?}
+    J -- Yes --> K[Emergency or protective action]
+    J -- No --> L[Replan with updated constraints]
+    H -- No --> M[Continue nominal planning]
+    L --> N[Control command generation]
+    M --> N
+    K --> O[Command suppression or stop output]
+    N --> P[Actuator synchronization]
+    P --> Q[Consistency verification]
+    Q --> R{Execution healthy?}
+    R -- No --> C
+    R -- Yes --> S[Publish telemetry and continue next cycle]
+```
 
-## Quick Start
+This second diagram describes the **reaction chain** that makes the platform useful in practice. The robot does not simply process data and move. It first checks that the inputs are fresh, then validates timing and calibration assumptions, then updates the scene, then asks whether the scene implies new risk, and only then produces control. If execution becomes inconsistent at any point, the system should degrade safely rather than silently continue.
+
+| Reaction stage | Expected behavior |
+|---|---|
+| Missing or stale input | Mark the cycle degraded and avoid unsafe control decisions |
+| Invalid timing or transform state | Refuse to trust fusion output until assumptions are restored |
+| New hazard detected | Update risk state before navigation or control proceeds |
+| Control inconsistency | Stop, hold, or re-enter a bounded recovery path |
+| Healthy cycle | Publish telemetry and continue deterministically |
+
+## What the repository currently offers
+
+The repository already provides the structural pieces needed for a serious robotics foundation. The Python package metadata is in place, the CI path runs formatting, linting, security checks, and tests, and the codebase has been moving toward release-readiness with reproducible build behavior. That matters because perception stacks become much easier to trust when they can be built and validated the same way every time.
+
+At the subsystem level, the project already contains modules for **sensor ingestion**, **time synchronization**, **sensor processing**, **mission planning**, **navigation management**, **hardware synchronization**, **hazard handling**, **fault detection**, and **power-aware management**. Some of these pieces are still scaffolding rather than fully mature robotics algorithms, but the repository structure already reflects the intended production flow.
+
+| Capability | Status |
+|---|---|
+| Python packaging | Present and release-oriented |
+| CI quality gates | Present |
+| ROS 2 integration path | Present as optional dependency path |
+| Direct sensor ingestion path | Present |
+| Real projective LiDAR-camera fusion | In progress / target stage |
+| Mapping and navigation integration | Planned expansion |
+| Benchmarks and simulation adapters | Planned expansion |
+
+## Repository layout
+
+The project layout is intentionally explicit so that perception, planning, and infrastructure work can evolve without becoming tangled. The main package lives under `robot_hw`, and its structure already hints at the intended separation between real-time robotics concerns.
+
+```text
+robot-lidar-fusion/
+├── robot_hw/
+│   ├── ai/
+│   ├── control/
+│   ├── core/
+│   ├── perception/
+│   ├── planning/
+│   ├── power/
+│   ├── robot_config.py
+│   ├── robot_orchestrator.py
+│   ├── simulation.py
+│   └── stress_simulation.py
+├── calibration/
+├── config/
+├── docs/
+├── examples/
+├── scripts/
+├── tests/
+├── Dockerfile
+├── pyproject.toml
+└── README.md
+```
+
+| Directory | Purpose |
+|---|---|
+| `robot_hw/perception` | Sensor I/O, time sync, frames, and fusion logic |
+| `robot_hw/planning` | Mission sequencing, navigation, and task mapping |
+| `robot_hw/control` | Command generation and actuator coordination |
+| `robot_hw/core` | Safety, communication, fault handling, and consistency checks |
+| `calibration` | Sensor intrinsics, extrinsics, and future alignment assets |
+| `scripts` and `examples` | Entry points for demos, replay, and bring-up |
+| `tests` | Unit and integration coverage for core behavior |
+
+## Installation
+
+The project targets **Python 3.11, 3.12, and 3.13**. ROS 2 support is optional, which makes it possible to install the package in non-ROS development environments while still keeping ROS 2 as the native runtime path for full robotics deployments.
 
 ```bash
-# Clone the repository
 git clone https://github.com/iceccarelli/robot-lidar-fusion.git
 cd robot-lidar-fusion
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e ".[dev]"
+```
 
-# Install in development mode with all extras
+If you want ROS 2-related extras, install them explicitly where your environment supports them.
+
+```bash
+pip install -e ".[dev,ros2]"
+```
+
+| Install path | Use case |
+|---|---|
+| `.[dev]` | Local development, tests, formatting, typing, and packaging |
+| `.[dev,ros2]` | ROS 2-enabled development environments |
+| Docker image | Reproducible execution path for CI and deployment |
+
+## Quick start
+
+A good quick start should help you verify that the repository is alive before you attempt real hardware integration. The first goal is therefore to confirm that the package installs, the tests pass, and the basic orchestration path can be invoked in a reproducible way.
+
+```bash
+# install dependencies
 pip install -e ".[dev]"
 
-# Run the control loop with mock hardware (50 cycles)
-python scripts/run_robot.py --cycles 50
-
-# Run the test suite
+# run tests
 pytest -v
 
-# Try a live sensor fusion demo (requires ROS2 or direct SDK)
-python examples/demo_os1_camera_live.py
+# lint and format checks
+ruff check .
+black --check .
+
+# build distribution artifacts
+python -m build
 ```
 
----
+Once the reproducibility baseline is green, you can move toward demos and ROS 2 bring-up as those stages mature.
 
-## Project Structure
+| First verification step | Why it matters |
+|---|---|
+| `pytest -v` | Confirms the code still behaves as expected |
+| `ruff check .` | Keeps the codebase clean and reviewable |
+| `black --check .` | Prevents formatting drift across contributors |
+| `python -m build` | Confirms the project can be packaged and released |
 
-```
-robot-lidar-fusion/
-├── robot_hw/                  # Main package
-│   ├── core/                  # Foundational services
-│   │   ├── communication.py           # Telemetry and inter‑process messaging
-│   │   ├── concurrency_management.py  # Named‑lock concurrency control
-│   │   ├── consistency_verification.py # State consistency checks
-│   │   ├── environment_adapter.py     # Environment‑specific tuning
-│   │   ├── execution_stack.py         # Scheduled task execution
-│   │   ├── fault_detection.py         # Joint and sensor fault detection
-│   │   ├── hardware_synchronization.py # Hardware read/write abstraction
-│   │   ├── hazard_manager.py          # Multi‑signal hazard aggregation
-│   │   └── memory_management.py       # Deterministic memory allocation
-│   ├── control/               # Actuator control
-│   │   ├── joint_synchronization.py   # Joint command dispatch with limits
-│   │   └── locomotion_controller.py   # Gait generation and velocity control
-│   ├── perception/            # Sensor ingestion and fusion
-│   │   ├── lidar_utils.py            # Point cloud utilities
-│   │   ├── sensor_frames.py          # LiDARFrame and CameraFrame data models
-│   │   ├── sensor_io_direct.py       # Direct SDK ingestion (Ouster, OpenCV)
-│   │   ├── sensor_io_ros2.py         # ROS2 topic ingestion
-│   │   ├── sensor_processing.py      # Multi‑sensor fusion
-│   │   └── time_sync.py              # LiDAR‑camera timestamp alignment
-│   ├── planning/              # Mission and navigation
-│   │   ├── mission_planner.py        # Goal queue and mission sequencing
-│   │   ├── navigation_manager.py     # Path planning and obstacle avoidance
-│   │   └── task_hardware_mapping.py  # Task‑to‑joint instruction mapping
-│   ├── power/                 # Power management
-│   │   ├── battery_management.py     # SOC tracking and energy estimation
-│   │   └── thermal_management.py     # Per‑joint thermal monitoring
-│   ├── ai/                    # AI and prediction
-│   │   └── predictive_controller.py  # State estimation and forecasting
-│   ├── robot_config.py        # Environment variable configuration
-│   ├── robot_orchestrator.py  # Main control loop
-│   ├── simulation.py          # Verbose stress test simulation
-│   └── stress_simulation.py   # Multi‑environment digital twin
-├── calibration/               # Sensor calibration files
-│   ├── camera_intrinsics.yaml
-│   ├── extrinsics.yaml
-│   └── README.md
-├── tests/                     # Test suite
-├── examples/                  # Working demonstrations
-├── scripts/                   # Entry points
-├── docs/                      # Documentation
-├── enterprise/                # Enterprise extensions (planned)
-├── gateway/                   # Fleet management gateway (planned)
-└── config/                    # Configuration templates
-```
+## Supported workflows
 
----
+The project is being shaped around a small number of workflows that are genuinely useful in robotics engineering. Instead of claiming universal readiness, it is better to be precise about what the repository is trying to support and how that support matures over time.
 
-## Supported Sensors
+| Workflow | Intent |
+|---|---|
+| Local development without ROS 2 | Build, test, lint, and package the core project cleanly |
+| ROS 2-native execution | Use ROS 2 topics and launch flows as the main robotics path |
+| Direct sensor experimentation | Connect vendor SDKs for targeted local experiments |
+| Replay-driven validation | Re-run recorded data to inspect perception behavior deterministically |
+| Containerized validation | Reproduce build and runtime behavior in a clean environment |
 
-| Sensor               | Interface                  | Status    |
-|----------------------|----------------------------|-----------|
-| Ouster OS1‑64/‑128   | Direct SDK or ROS2         | Supported |
-| Intel RealSense D435/D455 | Direct SDK or ROS2    | Supported |
-| USB cameras (UVC)    | OpenCV                     | Supported |
-| Generic IMU          | Via SensorProcessor        | Supported |
-| Encoders             | Via HardwareSynchronizer   | Supported |
+## Development and release discipline
 
----
+This repository takes release discipline seriously because robotics code becomes expensive when the published artifacts do not match the code users believe they are running. A proper release here means more than tagging a commit. It means that the **package version**, **Git tag**, **release notes**, **container build**, and **documentation** all agree with one another.
 
-## Examples
-The `examples/` directory contains three practical demonstrations designed to accelerate development and illustrate key capabilities:
+The same rule applies to features. A new capability is not considered complete just because a script runs once on a developer machine. It should be demonstrated, tested, typed where relevant, security-scanned, packaged, containerized, and documented. That is the threshold for adding real value instead of accumulating fragile code.
 
-- **`basic_control_loop.py`** – Runs multiple cycles of the `RobotOrchestrator` with mock hardware, providing the simplest way to understand and prototype the deterministic control system.
-- **`sensor_fusion_demo.py`** – Uses synthetic LiDAR and camera frames to demonstrate timestamp synchronization and real-time minimum forward obstacle distance calculation.
-- **`demo_os1_camera_live.py`** – Connects to a real Ouster OS1 LiDAR and camera (ROS2 or direct SDK) for live sensor ingestion and precise time synchronization.
+| Release requirement | Why it exists |
+|---|---|
+| Version consistency | Prevents PyPI, tags, and source state from drifting apart |
+| CI enforcement | Stops broken or partial work from becoming a release |
+| Docker validation | Ensures reproducible environments for deployment and debugging |
+| Documentation | Lets others understand the system without reverse engineering it |
 
-These examples serve as excellent starting points, significantly reducing onboarding time and enabling faster implementation of robust sensor fusion and control applications.
+## Roadmap
 
----
-## Enterprise & Gateway
-The `enterprise/` and `gateway/` directories provide a roadmap for scaling the project to industrial and fleet-level deployments, offering substantial value for commercial users through enhanced capabilities, compliance, and operational tools.
+The roadmap is intentionally practical. The first stages focus on **truth in packaging and CI**, because nothing else is trustworthy until builds and releases are dependable. After that, the emphasis shifts toward **reproducible demos**, **real projective sensor fusion**, **mapping and navigation**, and finally **simulation, benchmarks, and telemetry**.
 
-The **`enterprise/`** directory contains planned extensions for:
-- Certified robot connectors (KUKA, ABB, Fanuc, Universal Robots)
-- Advanced algorithms (EKF fusion, RRT* planning, MPC locomotion, SLAM)
-- ISO compliance modules
-
-The **`gateway/`** directory contains the planned hosted Robot Control Gateway for:
-- Fleet management
-- Telemetry aggregation
-- Remote operation
-- Over‑the‑air updates
-
-See the README files in each directory for details.
-
----
+| Stage | Focus |
+|---|---|
+| Stage 1 | Packaging, metadata, version truth, workflow discipline |
+| Stage 2 | Integrated CI with linting, tests, security, build checks |
+| Stage 3 | Reproducible demo, launch files, replay, RViz configuration |
+| Stage 4 | Real LiDAR-camera fusion with calibration, sync, and object-level fusion |
+| Stage 5 | Mapping, costmaps, planning, and Nav2-compatible flows |
+| Stage 6 | Simulation adapters, benchmarks, regression artifacts, telemetry |
 
 ## Contributing
 
-We welcome contributions from the robotics community. Whether you are fixing a bug, adding a sensor driver, improving documentation, or proposing a new subsystem, your work helps everyone building autonomous robots.
+Contributions are welcome, especially when they improve measurable robotics value. The most helpful pull requests are the ones that make the system easier to trust: a better test, a cleaner release workflow, a reproducible launch path, a stronger fusion primitive, or clearer operational documentation.
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+If you want to contribute, start by reading the existing structure and asking a simple question: does this change make the robot easier to run, verify, or extend? If the answer is yes, it is likely aligned with the direction of the project.
 
----
+| Good contribution examples | Why they matter |
+|---|---|
+| Better replay or launch tooling | Makes demos and debugging reproducible |
+| Improved fusion logic | Increases real robotics value |
+| Additional tests | Protects future refactors and releases |
+| Documentation corrections | Reduces onboarding cost for new contributors |
 
 ## License
 
-This project is released under the [Apache License 2.0](LICENSE).
+This project is released under the **Apache License 2.0**. That choice is meant to keep the code open, usable, and friendly to both research and industrial experimentation.
 
----
+## Closing note
 
-## Acknowledgements
-
-This project was created and is maintained by [iceccarelli](https://github.com/iceccarelli). It draws on years of experience integrating LiDAR, cameras, and control systems for autonomous robots across industrial, research, and field environments.
+This project is trying to take the opposite path. The aim is to build a stack that grows in public, tells the truth about its current maturity, and earns trust by being reproducible. If you are building a robot and need a foundation for LiDAR-camera perception, ROS 2 integration, safety-aware orchestration, and disciplined releases, this repository is meant to become a useful place to start.
