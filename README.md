@@ -13,11 +13,7 @@
 
 The aim of this repository is simple: to offer a serious, readable, and reproducible foundation for robotics work. We are not trying to claim that every subsystem is already complete. Instead, we are trying to build the repository in a way that is honest, useful, and easy to trust. If something is present, it should be understandable. If something is promised, it should be measurable. If something is released, it should be tested, packaged, documented, and reproducible.
 
-This project is still growing, but it is being shaped around a clear principle:
-
-> **Real robotics value matters more than appearances.**
->
-> A feature is not finished here until it is demonstrable, tested, typed where appropriate, scanned, packaged, containerized, and documented.
+This project is still growing!
 
 | Focus area | What this repository is trying to do well |
 |---|---|
