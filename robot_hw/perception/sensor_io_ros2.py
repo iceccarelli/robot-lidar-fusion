@@ -182,11 +182,11 @@ class _SensorIONode(Node):
             ts = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9  # type: ignore
         except Exception:
             ts = time.time()
-    
+
         points: list[tuple[float, float, float]] = []
         intensity_values: list[float] = []
         intensities: list[float] | None = None
-    
+
         # Convert point cloud to Cartesian coordinates
         if point_cloud2 is not None:
             try:
@@ -214,12 +214,12 @@ class _SensorIONode(Node):
                 intensities = None
         else:
             intensities = None
-    
+
         frame_id = getattr(msg.header, "frame_id", "lidar") or "lidar"
         meta: dict[str, Any] = {}
         if not points:
             meta["raw_msg"] = msg
-    
+
         lf = LidarFrame(
             timestamp=ts,
             frame_id=frame_id,
