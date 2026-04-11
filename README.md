@@ -1,34 +1,64 @@
 # Robot LiDAR Fusion
 
-**Robot LiDAR Fusion** is an open-source robotics software stack for teams that need a reproducible path from raw sensors to actionable autonomy. It is designed for **LiDAR-camera perception**, **ROS 2-native integration**, **navigation readiness**, and **safety-aware control**, while still remaining usable on machines that do not have ROS 2 installed.
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/robot-lidar-fusion.svg)](https://pypi.org/project/robot-lidar-fusion/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/robot-lidar-fusion.svg)](https://pypi.org/project/robot-lidar-fusion/)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Ficeccarelli%2Frobot--lidar--fusion-blue?logo=docker)](https://github.com/iceccarelli/robot-lidar-fusion/pkgs/container/robot-lidar-fusion)
+[![CI](https://github.com/iceccarelli/robot-lidar-fusion/actions/workflows/ci.yml/badge.svg)](https://github.com/iceccarelli/robot-lidar-fusion/actions/workflows/ci.yml)
+[![ROS 2 Native](https://img.shields.io/badge/ROS%202-native-22314E.svg)](https://docs.ros.org/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-This repository is not trying to be a flashy demo. It is meant to become a reliable foundation for real robotics work: ingest sensors, align time, fuse observations, build scene understanding, hand that understanding to planning and control, and do all of it with testing, packaging, containerization, and release discipline.
+**Robot LiDAR Fusion** is an open-source robotics software stack for teams working on **LiDAR-camera perception**, **ROS 2-native robotics workflows**, and **release-ready autonomy software**.
 
-The project is being developed in stages. Today, the strongest guarantees are around **packaging**, **CI**, **code quality**, and the basic perception/control scaffolding. The roadmap then moves toward **reproducible demos**, **real sensor fusion**, **mapping and navigation**, and finally **simulation, benchmarking, and telemetry**.
+The aim of this repository is simple: to offer a serious, readable, and reproducible foundation for robotics work. We are not trying to claim that every subsystem is already complete. Instead, we are trying to build the repository in a way that is honest, useful, and easy to trust. If something is present, it should be understandable. If something is promised, it should be measurable. If something is released, it should be tested, packaged, documented, and reproducible.
 
-| Area | Current intent |
+This project is still growing, but it is being shaped around a clear principle:
+
+> **Real robotics value matters more than appearances.**
+>
+> A feature is not finished here until it is demonstrable, tested, typed where appropriate, scanned, packaged, containerized, and documented.
+
+| Focus area | What this repository is trying to do well |
 |---|---|
-| Perception | Build a trustworthy LiDAR-camera fusion pipeline with ROS 2 as the native runtime path |
-| Controls | Keep actuator and orchestration interfaces deterministic and testable |
-| Releases | Enforce versioned, typed, scanned, packaged, and containerized delivery |
-| Adoption | Make it easy for researchers and engineers to run, inspect, extend, and benchmark |
+| Perception | Build a practical LiDAR-camera fusion baseline that can mature into a real robotics perception stack |
+| ROS 2 integration | Keep ROS 2 as the native execution path while allowing graceful non-ROS development workflows |
+| Release discipline | Align source code, package metadata, tags, containers, and documentation |
+| Adoption | Make the repository easier for engineers, researchers, and contributors to run, inspect, and extend |
 
-## Why this project exists
+## Why this repository exists
 
-Most robotics repositories solve one narrow problem well, but leave the integrator to connect everything else by hand. In practice, that means one code path for raw sensor drivers, another for frame alignment, another for fusion, another for planning, and a final collection of brittle scripts for deployment. The result is usually impressive in a lab notebook and fragile in a real workflow.
+A lot of robotics repositories are either impressive but difficult to reproduce, or tidy on the surface but too thin to be useful in real work. Teams often end up rebuilding the same integration layers: sensor ingestion, timestamp alignment, calibration handling, state verification, safety checks, planning hooks, and deployment scripts. That repeated integration work is expensive, and it is often where projects become fragile.
 
-**Robot LiDAR Fusion** exists to close that gap. The goal is to provide a single engineering baseline where perception, planning, safety, validation, and publication discipline all move together. If a feature cannot be demonstrated, tested, typed, scanned, packaged, containerized, and documented, it is not finished.
+**Robot LiDAR Fusion** is an attempt to reduce that friction. The goal is to provide a foundation that helps bridge the gap between raw sensor streams and autonomy-ready decision making, without pretending that robotics becomes easy. We want the repository to be honest about what is already solid, clear about what is still in progress, and welcoming to the kind of contributions that improve real capability rather than just surface polish.
 
-| Design principle | What it means here |
+| Design principle | What it means in practice |
 |---|---|
-| Reproducibility first | Demos and releases must be repeatable across environments |
-| Robotics value over cosmetics | Real perception and planning features come before surface polish |
-| ROS 2-native, not ROS 2-only | ROS 2 should be the main path, but local fallbacks should fail gracefully |
-| Release discipline | Versions, tags, builds, containers, and docs must stay aligned |
+| Reproducibility first | Build, test, package, and release behavior should be repeatable |
+| Humility over hype | The README should tell the truth about current maturity |
+| Robotics value over cosmetics | Perception, planning, and validation come before decorative features |
+| ROS 2-native, not ROS 2-only | ROS 2 is the intended robotics path, but local developer ergonomics still matter |
+
+## What the repository currently offers
+
+The current state of the repository is strongest in **project discipline** and **architecture scaffolding**. Packaging, CI, security scanning, and core module organization are in place. The repository already contains a meaningful breakdown of perception, planning, control, safety, and power-related modules, even though some of the deeper robotics algorithms are still on the roadmap rather than fully realized.
+
+This is important because good robotics software is not only about algorithms. It is also about whether another engineer can install the project, inspect the structure, understand the assumptions, run the checks, and reproduce the results. That is the standard this project is trying to reach.
+
+| Capability | Current state |
+|---|---|
+| Python packaging | Present and release-oriented |
+| CI checks | Present |
+| Ruff, Black, tests, security scanning | Present |
+| ROS 2 integration path | Present as an optional path |
+| Direct sensor ingestion path | Present |
+| Real calibration-aware LiDAR-camera fusion | In progress |
+| Mapping and navigation stack | Planned next-stage work |
+| Simulation, benchmarks, telemetry | Planned next-stage work |
 
 ## System architecture
 
-At a high level, the repository is organized around a deterministic chain: **ingest**, **synchronize**, **fuse**, **decide**, **act**, and **verify**. The orchestrator is the spine of the system, but the real value comes from how the perception, planning, control, and safety layers exchange state without collapsing into ad hoc glue code.
+At a high level, the repository is organized around a simple but important robotics chain: **ingest**, **synchronize**, **fuse**, **understand**, **plan**, **act**, and **verify**. The objective is not just to move data from one module to another, but to keep the reactions between those modules explicit and inspectable.
 
 ```mermaid
 flowchart LR
@@ -45,20 +75,20 @@ flowchart LR
     J --> F
 ```
 
-The first diagram shows the **main autonomy path**. Data enters through direct sensor SDKs or ROS 2 topics, is normalized and synchronized, then becomes a fused scene representation that planning and control can actually use. Just as importantly, telemetry and verification flow back into both perception and planning so the robot is not blindly executing stale assumptions.
+The diagram above describes the **main operational flow**. Sensor data is brought in through ROS 2 or direct interfaces, aligned in time and space, fused into a more useful scene estimate, then handed to planning and control. Verification is not a separate afterthought. It feeds back into perception and planning so that the robot does not continue blindly when the underlying assumptions degrade.
 
 | Layer | Core responsibility |
 |---|---|
-| Sensor I/O | Acquire frames and point clouds from ROS 2 or direct interfaces |
-| Time and frame handling | Align timestamps and normalize spatial references |
-| Fusion | Combine heterogeneous observations into one usable scene estimate |
-| Planning | Turn scene understanding into tasks, routes, and motion intent |
-| Control | Convert intent into bounded robot commands |
-| Verification | Detect inconsistencies, hazards, faults, and degraded states |
+| Sensor I/O | Acquire frames and point clouds from ROS 2 or direct drivers |
+| Time and frame handling | Align timestamps and normalize reference frames |
+| Fusion | Combine heterogeneous sensor observations into one usable estimate |
+| Planning | Turn perception output into navigation and task decisions |
+| Control | Convert decisions into bounded robot commands |
+| Verification | Detect hazards, stale data, and inconsistent execution |
 
 ## Chain of reactions and safety logic
 
-In robotics, the interesting part is rarely the happy path alone. The critical engineering question is what happens when the chain reacts to new evidence: a closer obstacle, stale timestamps, a hot actuator, a dropped frame, or a control inconsistency. The system therefore needs a visible reaction model rather than hidden conditional logic.
+In a serious robotics system, the most important logic often lives in the reactions between subsystems. What should happen when a frame arrives late, when a transform is invalid, when a hazard becomes visible, or when the control output no longer matches the sensed state? Those reactions should be visible and deliberate.
 
 ```mermaid
 flowchart TD
@@ -85,35 +115,19 @@ flowchart TD
     R -- Yes --> S[Publish telemetry and continue next cycle]
 ```
 
-This second diagram describes the **reaction chain** that makes the platform useful in practice. The robot does not simply process data and move. It first checks that the inputs are fresh, then validates timing and calibration assumptions, then updates the scene, then asks whether the scene implies new risk, and only then produces control. If execution becomes inconsistent at any point, the system should degrade safely rather than silently continue.
+This second diagram shows the **reaction chain**. The robot first decides whether it can trust its inputs, then whether it can trust its timing and calibration assumptions, then whether the fused scene implies new risk, and only then whether it is safe to continue producing control output. If execution becomes inconsistent, the system should degrade safely instead of hiding the problem.
 
 | Reaction stage | Expected behavior |
 |---|---|
-| Missing or stale input | Mark the cycle degraded and avoid unsafe control decisions |
-| Invalid timing or transform state | Refuse to trust fusion output until assumptions are restored |
-| New hazard detected | Update risk state before navigation or control proceeds |
-| Control inconsistency | Stop, hold, or re-enter a bounded recovery path |
+| Missing or stale input | Mark the cycle degraded and avoid unsafe decisions |
+| Invalid timing or transforms | Refuse to trust downstream fusion until assumptions are restored |
+| Detected hazard | Update risk state before planning or control continues |
+| Failed execution verification | Hold, stop, or enter a bounded recovery path |
 | Healthy cycle | Publish telemetry and continue deterministically |
-
-## What the repository currently offers
-
-The repository already provides the structural pieces needed for a serious robotics foundation. The Python package metadata is in place, the CI path runs formatting, linting, security checks, and tests, and the codebase has been moving toward release-readiness with reproducible build behavior. That matters because perception stacks become much easier to trust when they can be built and validated the same way every time.
-
-At the subsystem level, the project already contains modules for **sensor ingestion**, **time synchronization**, **sensor processing**, **mission planning**, **navigation management**, **hardware synchronization**, **hazard handling**, **fault detection**, and **power-aware management**. Some of these pieces are still scaffolding rather than fully mature robotics algorithms, but the repository structure already reflects the intended production flow.
-
-| Capability | Status |
-|---|---|
-| Python packaging | Present and release-oriented |
-| CI quality gates | Present |
-| ROS 2 integration path | Present as optional dependency path |
-| Direct sensor ingestion path | Present |
-| Real projective LiDAR-camera fusion | In progress / target stage |
-| Mapping and navigation integration | Planned expansion |
-| Benchmarks and simulation adapters | Planned expansion |
 
 ## Repository layout
 
-The project layout is intentionally explicit so that perception, planning, and infrastructure work can evolve without becoming tangled. The main package lives under `robot_hw`, and its structure already hints at the intended separation between real-time robotics concerns.
+The repository layout is intentionally structured to make the system easier to understand and extend. The main package lives under `robot_hw`, with separate areas for perception, planning, control, core services, and power-related logic.
 
 ```text
 robot-lidar-fusion/
@@ -141,17 +155,17 @@ robot-lidar-fusion/
 
 | Directory | Purpose |
 |---|---|
-| `robot_hw/perception` | Sensor I/O, time sync, frames, and fusion logic |
-| `robot_hw/planning` | Mission sequencing, navigation, and task mapping |
+| `robot_hw/perception` | Sensor I/O, time sync, sensor frames, and fusion logic |
+| `robot_hw/planning` | Mission sequencing, navigation, and task-to-hardware mapping |
 | `robot_hw/control` | Command generation and actuator coordination |
-| `robot_hw/core` | Safety, communication, fault handling, and consistency checks |
-| `calibration` | Sensor intrinsics, extrinsics, and future alignment assets |
+| `robot_hw/core` | Hazard handling, communication, consistency checks, and fault logic |
+| `calibration` | Intrinsics, extrinsics, and future calibration assets |
 | `scripts` and `examples` | Entry points for demos, replay, and bring-up |
-| `tests` | Unit and integration coverage for core behavior |
+| `tests` | Unit and integration coverage for key behavior |
 
 ## Installation
 
-The project targets **Python 3.11, 3.12, and 3.13**. ROS 2 support is optional, which makes it possible to install the package in non-ROS development environments while still keeping ROS 2 as the native runtime path for full robotics deployments.
+The project targets **Python 3.11, 3.12, and 3.13**. ROS 2 is an optional dependency path rather than a mandatory installation requirement, which makes local development easier while preserving a ROS 2-native runtime direction.
 
 ```bash
 git clone https://github.com/iceccarelli/robot-lidar-fusion.git
@@ -162,21 +176,21 @@ pip install --upgrade pip
 pip install -e ".[dev]"
 ```
 
-If you want ROS 2-related extras, install them explicitly where your environment supports them.
+If you are working in a ROS 2-capable environment, you can install the ROS 2 extras explicitly.
 
 ```bash
 pip install -e ".[dev,ros2]"
 ```
 
-| Install path | Use case |
+| Install path | Recommended use |
 |---|---|
-| `.[dev]` | Local development, tests, formatting, typing, and packaging |
+| `.[dev]` | Local development, tests, formatting, typing, and builds |
 | `.[dev,ros2]` | ROS 2-enabled development environments |
-| Docker image | Reproducible execution path for CI and deployment |
+| Container image | Reproducible execution and CI-aligned validation |
 
 ## Quick start
 
-A good quick start should help you verify that the repository is alive before you attempt real hardware integration. The first goal is therefore to confirm that the package installs, the tests pass, and the basic orchestration path can be invoked in a reproducible way.
+A good quick start should not try to do everything at once. It should first prove that the repository installs cleanly, that the quality gates work, and that the project can be built in a repeatable way.
 
 ```bash
 # install dependencies
@@ -185,78 +199,78 @@ pip install -e ".[dev]"
 # run tests
 pytest -v
 
-# lint and format checks
+# run lint and formatting checks
 ruff check .
 black --check .
 
-# build distribution artifacts
+# build release artifacts
 python -m build
 ```
 
-Once the reproducibility baseline is green, you can move toward demos and ROS 2 bring-up as those stages mature.
+Once those checks are green, you have a stable baseline from which to move toward sensor replay, ROS 2 bring-up, and real-hardware integration.
 
-| First verification step | Why it matters |
+| Verification step | Why it matters |
 |---|---|
-| `pytest -v` | Confirms the code still behaves as expected |
+| `pytest -v` | Confirms expected behavior still holds |
 | `ruff check .` | Keeps the codebase clean and reviewable |
-| `black --check .` | Prevents formatting drift across contributors |
-| `python -m build` | Confirms the project can be packaged and released |
+| `black --check .` | Prevents formatting drift |
+| `python -m build` | Confirms the package is releasable |
 
 ## Supported workflows
 
-The project is being shaped around a small number of workflows that are genuinely useful in robotics engineering. Instead of claiming universal readiness, it is better to be precise about what the repository is trying to support and how that support matures over time.
+The repository is being shaped around a few workflows that are genuinely useful for robotics engineering rather than artificially broad claims.
 
 | Workflow | Intent |
 |---|---|
-| Local development without ROS 2 | Build, test, lint, and package the core project cleanly |
+| Local development without ROS 2 | Build, test, lint, and package the project cleanly |
 | ROS 2-native execution | Use ROS 2 topics and launch flows as the main robotics path |
-| Direct sensor experimentation | Connect vendor SDKs for targeted local experiments |
-| Replay-driven validation | Re-run recorded data to inspect perception behavior deterministically |
-| Containerized validation | Reproduce build and runtime behavior in a clean environment |
+| Direct sensor experimentation | Run targeted tests against vendor SDKs when needed |
+| Replay-driven validation | Re-run data deterministically to inspect perception behavior |
+| Containerized validation | Reproduce runtime and build behavior in a clean environment |
 
 ## Development and release discipline
 
-This repository takes release discipline seriously because robotics code becomes expensive when the published artifacts do not match the code users believe they are running. A proper release here means more than tagging a commit. It means that the **package version**, **Git tag**, **release notes**, **container build**, and **documentation** all agree with one another.
+One of the main goals of this repository is to become a robotics project that people can trust. That trust does not come from bold claims. It comes from consistency. A proper release here means that the **source code**, **package version**, **Git tag**, **release notes**, **container image**, and **README** all point to the same state.
 
-The same rule applies to features. A new capability is not considered complete just because a script runs once on a developer machine. It should be demonstrated, tested, typed where relevant, security-scanned, packaged, containerized, and documented. That is the threshold for adding real value instead of accumulating fragile code.
+The same philosophy applies to feature work. A feature is not considered done just because it worked once in a local script. It should be demonstrable, tested, typed where relevant, security-scanned, packaged, containerized, and documented. That bar is intentionally high, but it is also what keeps a repository useful over time.
 
-| Release requirement | Why it exists |
+| Release requirement | Why it matters |
 |---|---|
-| Version consistency | Prevents PyPI, tags, and source state from drifting apart |
-| CI enforcement | Stops broken or partial work from becoming a release |
-| Docker validation | Ensures reproducible environments for deployment and debugging |
-| Documentation | Lets others understand the system without reverse engineering it |
+| Version consistency | Prevents tags, source, and published artifacts from drifting apart |
+| CI enforcement | Protects releases from avoidable regressions |
+| Container validation | Makes debugging and deployment more reproducible |
+| Honest documentation | Helps new users understand current maturity without guesswork |
 
 ## Roadmap
 
-The roadmap is intentionally practical. The first stages focus on **truth in packaging and CI**, because nothing else is trustworthy until builds and releases are dependable. After that, the emphasis shifts toward **reproducible demos**, **real projective sensor fusion**, **mapping and navigation**, and finally **simulation, benchmarks, and telemetry**.
+The roadmap is practical and stage-based. The early work focuses on **truth in packaging** and **CI discipline**, because everything else depends on that foundation. The next stages move toward **reproducible demos**, **real calibration-aware fusion**, **mapping and navigation**, and then **simulation, benchmarking, and telemetry**.
 
 | Stage | Focus |
 |---|---|
 | Stage 1 | Packaging, metadata, version truth, workflow discipline |
-| Stage 2 | Integrated CI with linting, tests, security, build checks |
-| Stage 3 | Reproducible demo, launch files, replay, RViz configuration |
-| Stage 4 | Real LiDAR-camera fusion with calibration, sync, and object-level fusion |
-| Stage 5 | Mapping, costmaps, planning, and Nav2-compatible flows |
-| Stage 6 | Simulation adapters, benchmarks, regression artifacts, telemetry |
+| Stage 2 | Integrated CI with linting, tests, security, and build validation |
+| Stage 3 | Reproducible demo, launch files, replay, and RViz configuration |
+| Stage 4 | Real LiDAR-camera fusion with calibration, sync, transforms, and object-level fusion |
+| Stage 5 | Mapping, costmaps, planning, and Nav2-compatible workflows |
+| Stage 6 | Simulation adapters, benchmarks, regression artifacts, and telemetry |
 
 ## Contributing
 
-Contributions are welcome, especially when they improve measurable robotics value. The most helpful pull requests are the ones that make the system easier to trust: a better test, a cleaner release workflow, a reproducible launch path, a stronger fusion primitive, or clearer operational documentation.
+Contributions are welcome, especially when they improve the repository in ways that are measurable and useful. Good contributions are usually not the loudest ones. They are the ones that make the system easier to run, easier to verify, easier to understand, or harder to break.
 
-If you want to contribute, start by reading the existing structure and asking a simple question: does this change make the robot easier to run, verify, or extend? If the answer is yes, it is likely aligned with the direction of the project.
+If you want to contribute, a great place to start is by asking one simple question: **does this change make the repository more trustworthy for real robotics work?** If the answer is yes, it is probably a strong contribution.
 
-| Good contribution examples | Why they matter |
+| Useful contribution types | Why they help |
 |---|---|
-| Better replay or launch tooling | Makes demos and debugging reproducible |
-| Improved fusion logic | Increases real robotics value |
-| Additional tests | Protects future refactors and releases |
-| Documentation corrections | Reduces onboarding cost for new contributors |
+| Better replay or bring-up tooling | Makes demos and debugging reproducible |
+| Improved fusion or calibration logic | Adds direct robotics value |
+| More tests or stricter checks | Protects the codebase as it grows |
+| Better documentation | Lowers the cost of onboarding and review |
 
 ## License
 
-This project is released under the **Apache License 2.0**. That choice is meant to keep the code open, usable, and friendly to both research and industrial experimentation.
+This project is released under the **Apache License 2.0**.
 
-## Closing note
+## Final note
 
-This project is trying to take the opposite path. The aim is to build a stack that grows in public, tells the truth about its current maturity, and earns trust by being reproducible. If you are building a robot and need a foundation for LiDAR-camera perception, ROS 2 integration, safety-aware orchestration, and disciplined releases, this repository is meant to become a useful place to start.
+This repository is still growing, and that is part of its value. It is being built in the open, with a deliberate effort to improve not only the algorithms but also the engineering habits around them. The hope is that over time **Robot LiDAR Fusion** becomes the kind of repository people return to because it is useful, honest, and steadily improving.
