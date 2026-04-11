@@ -1,5 +1,7 @@
 # Robot LiDAR Fusion
 
+**Robot LiDAR Fusion** is an open-source robotics software stack for teams working on **LiDAR-camera perception**, **ROS 2-native robotics workflows**, and **release-ready autonomy software**.
+
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/robot-lidar-fusion.svg)](https://pypi.org/project/robot-lidar-fusion/)
@@ -9,7 +11,7 @@
 [![ROS 2 Native](https://img.shields.io/badge/ROS%202-native-22314E.svg)](https://docs.ros.org/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-**Robot LiDAR Fusion** is an open-source robotics software stack for teams working on **LiDAR-camera perception**, **ROS 2-native robotics workflows**, and **release-ready autonomy software**.
+---
 
 The aim of this repository is simple: to offer a serious, readable, and reproducible foundation for robotics work. We are not trying to claim that every subsystem is already complete. Instead, we are trying to build the repository in a way that is honest, useful, and easy to trust. If something is present, it should be understandable. If something is promised, it should be measurable. If something is released, it should be tested, packaged, documented, and reproducible.
 
